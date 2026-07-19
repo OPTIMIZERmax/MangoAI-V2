@@ -34,7 +34,6 @@ export class EmbedFactory {
           inline: false,
         }
       )
-      .setThumbnail('attachment://standard.gif')
       .setTimestamp()
       .setFooter({ text: '🥭 MangoAI • Powered by AI Tutors' });
     return embed;

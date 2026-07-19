@@ -433,17 +433,6 @@ export class DiscordBot {
     this.presenceInterval = setInterval(updatePresence, 30000);
   }
 
-  async login() {
-    try {
-      await this.client.login(config.discord.token);
-      logger.info('Discord bot logged in successfully');
-      this.startScheduleLoop();
-    } catch (error) {
-      logger.error({ error: error.message }, 'Failed to login to Discord');
-      throw error;
-    }
-  }
-
   /**
    * Clear all messages from a channel
    */
@@ -494,22 +483,12 @@ export class DiscordBot {
 
       logger.info('📤 Sending fresh startup messages...');
 
-      // Message for learning platform channel with GIF
+      // Message for learning platform channel
       if (channels.learningPlatform) {
         const platformEmbed = EmbedFactory.buildLearningPlatformEmbed();
         const platformButtons = ActionRowFactory.buildLearningPlatformButtons();
         
-        // Prepare GIF attachment if it exists
-        let messagePayload = { embeds: [platformEmbed], components: platformButtons };
-        try {
-          const gifPath = path.join(__dirname, '../../standard.gif');
-          const attachment = new AttachmentBuilder(gifPath, { name: 'standard.gif' });
-          messagePayload.files = [attachment];
-        } catch (err) {
-          logger.warn({ error: err.message }, '⚠️ Could not load GIF file');
-        }
-        
-        await this.sendToConfiguredChannel('learningPlatform', messagePayload).catch(err => 
+        await this.sendToConfiguredChannel('learningPlatform', { embeds: [platformEmbed], components: [platformButtons] }).catch(err => 
           logger.warn({ channel: 'learningPlatform', error: err.message }, 'Failed to send startup message to learning platform channel')
         );
       }
