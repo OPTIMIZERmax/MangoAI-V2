@@ -14,6 +14,8 @@ export const config = {
       learningPlatform: process.env.DISCORD_CHANNEL_LEARNING_ID || process.env.DISCORD_CHANNEL_HOMEWORK_ID || '',
       autoSchedule: process.env.DISCORD_CHANNEL_SCHEDULE_ID || '',
       supportTickets: process.env.DISCORD_CHANNEL_SUPPORT_ID || '',
+      pastPapers: process.env.DISCORD_CHANNEL_PAST_PAPERS_ID || '',
+      homework: process.env.DISCORD_CHANNEL_HOMEWORK_ID || process.env.DISCORD_CHANNEL_LEARNING_ID || '',
     },
   },
 

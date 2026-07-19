@@ -307,9 +307,23 @@ export class CommandHandler {
     );
   }
 
+  /**
+   * Map command channel keys to config channel keys
+   */
+  _mapChannelKey(key) {
+    const channelMap = {
+      'homework': 'homework',
+      'pastPapers': 'pastPapers',
+      'schedule': 'autoSchedule',
+      'support': 'supportTickets',
+    };
+    return channelMap[key] || key;
+  }
+
   async postToChannelOrReply(message, payload, channelKey) {
+    const mappedKey = this._mapChannelKey(channelKey);
     if (this.app?.bot && typeof this.app.bot.sendToConfiguredChannel === 'function') {
-      const sent = await this.app.bot.sendToConfiguredChannel(channelKey, payload, message.channel).catch(() => null);
+      const sent = await this.app.bot.sendToConfiguredChannel(mappedKey, payload, message.channel).catch(() => null);
       if (sent) {
         return sent;
       }

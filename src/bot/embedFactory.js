@@ -22,6 +22,7 @@ export class EmbedFactory {
       .setColor('#5865F2')
       .setTitle('🥭 MangoAI Learning Platform')
       .setDescription('**Your gateway to personalised AI tutoring assistance**\n\nOur verified AI tutors are available to help you across multiple fields of study. Connect with qualified assistance in real-time and solve your most challenging problems.')
+      .setImage('attachment://standard.gif')
       .addFields(
         {
           name: '✨ Key Features',

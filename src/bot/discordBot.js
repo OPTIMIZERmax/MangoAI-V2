@@ -3,6 +3,7 @@ import { EmbedFactory, ActionRowFactory } from './embedFactory.js';
 import logger from '../utils/logger.js';
 import config from '../utils/config.js';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -202,6 +203,10 @@ export class DiscordBot {
       return this.handlePastPapersButton(interaction, action);
     }
 
+    if (group === 'platform') {
+      return this.handlePlatformButton(interaction, action);
+    }
+
     if (group === 'schedule') {
       return this.handleScheduleButton(interaction, action);
     }
@@ -294,6 +299,130 @@ export class DiscordBot {
     return this.respondToInteraction(interaction, { content: 'Unknown schedule action.' });
   }
 
+  /**
+   * Handle platform learning embed buttons
+   */
+  async handlePlatformButton(interaction, action) {
+    const userId = interaction.user.id;
+    const queueSystem = this.app?.queueSystem;
+
+    switch (action) {
+      case 'join_queue': {
+        if (!queueSystem) {
+          return this.respondToInteraction(interaction, { content: 'Queue system is not available.' });
+        }
+        const entry = queueSystem.joinQueue(userId, 'sparxMaths', 'solo');
+        if (entry.error) {
+          return this.respondToInteraction(interaction, { content: `❌ ${entry.error} (Position: #${entry.position})` });
+        }
+        const embed = new EmbedBuilder()
+          .setColor('#00FF00')
+          .setTitle('✅ Joined Queue')
+          .addFields(
+            { name: 'Platform', value: 'Sparx Maths', inline: true },
+            { name: 'Position', value: `#${entry.position}`, inline: true },
+            { name: 'Est. Wait', value: `${entry.estimatedWaitTime} minutes`, inline: true }
+          );
+        return this.respondToInteraction(interaction, { embeds: [embed] });
+      }
+
+      case 'join_saved': {
+        return this.respondToInteraction(interaction, { content: 'Use `!join <platform>` to join a queue with your saved accounts. Configure saved accounts in Settings.' });
+      }
+
+      case 'join_group': {
+        return this.respondToInteraction(interaction, { content: 'Use `!join <platform>` to join a queue. Group queue feature coming soon!' });
+      }
+
+      case 'check_queue': {
+        if (!queueSystem) {
+          return this.respondToInteraction(interaction, { content: 'Queue system is not available.' });
+        }
+        const stats = queueSystem.getQueueStats();
+        const embed = EmbedFactory.buildQueueEmbed(stats);
+        return this.respondToInteraction(interaction, { embeds: [embed] });
+      }
+
+      case 'tutorials': {
+        const tutorialEmbed = new EmbedBuilder()
+          .setColor('#5865F2')
+          .setTitle('📚 MangoAI Tutorials')
+          .setDescription('Learn how to use MangoAI effectively:')
+          .addFields(
+            { name: '1️⃣ Getting Started', value: 'Use `!help` to see all available commands.' },
+            { name: '2️⃣ Homework', value: 'Use `!homework create [subject] [name]` to add tasks.' },
+            { name: '3️⃣ Queue', value: 'Press **Join Queue** or use `!join <platform>`.' },
+            { name: '4️⃣ Schedule', value: 'Use `!schedule create [platform] [time] [days]`.' },
+            { name: '5️⃣ Premium', value: 'Use `!trial claim` for a free trial or `!premium` to upgrade.' }
+          )
+          .setTimestamp()
+          .setFooter({ text: '🥭 MangoAI • Learn & Succeed' });
+        return this.respondToInteraction(interaction, { embeds: [tutorialEmbed] });
+      }
+
+      case 'view_slots': {
+        const slotsEmbed = new EmbedBuilder()
+          .setColor('#00FF00')
+          .setTitle('🕐 Available Slots')
+          .setDescription('Current tutor availability:')
+          .addFields(
+            { name: 'Sparx Maths', value: '🟢 Available', inline: true },
+            { name: 'Educake', value: '🟢 Available', inline: true },
+            { name: 'Dr Frost', value: '🟢 Available', inline: true },
+            { name: 'Seneca', value: '🟢 Available', inline: true },
+            { name: 'LanguageNut', value: '🟢 Available', inline: true }
+          )
+          .setTimestamp()
+          .setFooter({ text: '🥭 MangoAI • Slots update in real-time' });
+        return this.respondToInteraction(interaction, { embeds: [slotsEmbed] });
+      }
+
+      case 'history': {
+        const tracker = this.app?.homeworkTracker;
+        if (!tracker) {
+          return this.respondToInteraction(interaction, { content: 'Homework tracker is not available.' });
+        }
+        const tasks = tracker.getActiveTasks(userId);
+        const summary = tracker.getProgressSummary(userId);
+        const embed = EmbedFactory.buildHomeworkEmbed(tasks, summary);
+        return this.respondToInteraction(interaction, { embeds: [embed] });
+      }
+
+      case 'settings': {
+        const settingsEmbed = new EmbedBuilder()
+          .setColor('#5865F2')
+          .setTitle('⚙️ MangoAI Settings')
+          .setDescription('Configure your MangoAI experience:')
+          .addFields(
+            { name: '📋 Saved Accounts', value: 'Configure your platform accounts in the `.env` file.' },
+            { name: '🔔 Notifications', value: 'Homework updates are sent to this channel.' },
+            { name: '⏰ Auto-Schedule', value: 'Use `!schedule create` to set up automatic reminders.' }
+          )
+          .setTimestamp()
+          .setFooter({ text: '🥭 MangoAI • Settings' });
+        return this.respondToInteraction(interaction, { embeds: [settingsEmbed] });
+      }
+
+      case 'feedback': {
+        const feedbackEmbed = new EmbedBuilder()
+          .setColor('#FFD700')
+          .setTitle('💬 Feedback & Suggestions')
+          .setDescription('We value your feedback! Here\'s how to share:')
+          .addFields(
+            { name: '📝 Create a Ticket', value: 'Use `!ticket create feedback <your message>`' },
+            { name: '💡 Feature Requests', value: 'Use `!ticket create suggestion <your idea>`' },
+            { name: '🐛 Report a Bug', value: 'Use `!ticket create bug <description>`' }
+          )
+          .setTimestamp()
+          .setFooter({ text: '🥭 MangoAI • Your feedback shapes our future' });
+        return this.respondToInteraction(interaction, { embeds: [feedbackEmbed] });
+      }
+
+      default:
+        return this.respondToInteraction(interaction, { content: 'Unknown platform action.' });
+    }
+  }
+
   async acknowledgeInteraction(interaction) {
     if (interaction.deferred || interaction.replied) return;
 
@@ -320,7 +449,7 @@ export class DiscordBot {
       if (!schedules.length) return;
 
       for (const schedule of schedules) {
-        const channel = await this.getChannelByConfigKey('schedule');
+        const channel = await this.getChannelByConfigKey('autoSchedule');
         if (!channel) continue;
 
         const embed = new EmbedBuilder()
@@ -483,12 +612,21 @@ export class DiscordBot {
 
       logger.info('📤 Sending fresh startup messages...');
 
-      // Message for learning platform channel
+      // Message for learning platform channel - with GIF attachment
       if (channels.learningPlatform) {
         const platformEmbed = EmbedFactory.buildLearningPlatformEmbed();
         const platformButtons = ActionRowFactory.buildLearningPlatformButtons();
         
-        await this.sendToConfiguredChannel('learningPlatform', { embeds: [platformEmbed], components: [platformButtons] }).catch(err => 
+        // Read the GIF file and attach it so Discord can display it in the embed
+        const gifPath = path.join(__dirname, '../../standard.gif');
+        let payload = { embeds: [platformEmbed], components: platformButtons };
+        
+        if (fs.existsSync(gifPath)) {
+          const gifAttachment = new AttachmentBuilder(gifPath, { name: 'standard.gif' });
+          payload.files = [gifAttachment];
+        }
+        
+        await this.sendToConfiguredChannel('learningPlatform', payload).catch(err => 
           logger.warn({ channel: 'learningPlatform', error: err.message }, 'Failed to send startup message to learning platform channel')
         );
       }
