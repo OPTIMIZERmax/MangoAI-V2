@@ -25,16 +25,30 @@ export class SparxMaths extends Platform {
 
   async authenticate() {
     try {
-      this.validateCredentials();
       logger.info({ platform: this.name }, 'Authenticating with Sparx Maths');
-      // Puppeteer login logic would go here
+
+      const { default: login } = await import('./sparxLogin.js');
+
+      const result = await login.default({
+        username: this.credentials.username,
+        password: this.credentials.password,
+        type: this.credentials.type || 'Normal',
+      });
+
       this.session = {
         authenticated: true,
         authenticatedAt: new Date(),
+        authToken: result.authToken,
       };
+
       return this.session;
+
     } catch (error) {
-      throw new PlatformError('Authentication failed', this.name, { error: error.message });
+      throw new PlatformError(
+        'Authentication failed',
+        this.name,
+        { error: error.message }
+      );
     }
   }
 

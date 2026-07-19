@@ -47,9 +47,10 @@ export const config = {
   // Platform Credentials
   platforms: {
     sparx: {
-      email: process.env.SPARX_EMAIL || '',
-      password: process.env.SPARX_PASSWORD || '',
-    },
+  username: '',
+  password: '',
+  type: 'Normal',
+},
     educake: {
       email: process.env.EDUCAKE_EMAIL || '',
       password: process.env.EDUCAKE_PASSWORD || '',

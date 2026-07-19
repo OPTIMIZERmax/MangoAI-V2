@@ -43,21 +43,70 @@ export class DiscordBot {
     });
 
     this.client.on('messageCreate', async (message) => {
-      if (message.author.bot) return;
-      if (!message.content.startsWith(config.discord.prefix)) return;
+  if (message.author.bot) return;
 
-      const args = message.content.slice(config.discord.prefix.length).trim().split(/ +/);
-      const command = args.shift().toLowerCase();
 
-      try {
-        await this.handleCommand(command, args, message);
-      } catch (error) {
-        logger.error({ error: error.message, command }, 'Error handling command');
-        await this.replyToChannel(message, {
-          content: `❌ An error occurred: ${error.message}`,
-        });
-      }
+  // ==========================
+  // AUTO PLATFORM CHANNELS
+  // ==========================
+
+  const platformChannels = {
+    "sparx-maths": "sparxMaths",
+    "science-reader": "science",
+    "educake": "educake",
+    "drfrost": "drfrost",
+    "seneca": "seneca",
+    "languagenut": "languagenut"
+  };
+
+
+  const channelName = message.channel.name;
+  const platform = platformChannels[channelName];
+
+
+  if (platform) {
+    return this.handlePlatformQuestion(
+      message,
+      platform
+    );
+  }
+
+
+  // ==========================
+  // NORMAL COMMANDS
+  // ==========================
+
+  if (!message.content.startsWith(config.discord.prefix)) return;
+
+
+  const args = message.content
+    .slice(config.discord.prefix.length)
+    .trim()
+    .split(/ +/);
+
+
+  const command = args.shift().toLowerCase();
+
+
+  try {
+    await this.handleCommand(command,args,message);
+  }
+
+  catch(error){
+
+    logger.error({
+      error:error.message,
+      command
+    },
+    'Error handling command');
+
+    await this.replyToChannel(message,{
+      content:`❌ ${error.message}`
     });
+
+  }
+
+});
 
     this.client.on('interactionCreate', async (interaction) => {
       if (!interaction.isButton()) return;

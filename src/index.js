@@ -87,8 +87,7 @@ class UltimateAutoCompleter {
     ];
 
     for (const { name, Class } of platformConfigs) {
-      const credentials = config.platforms[name] || {};
-      const platform = new Class(credentials);
+      const platform = new Class({});
       this.platforms.set(name, platform);
       logger.info({ platform: name }, 'Platform registered');
     }
