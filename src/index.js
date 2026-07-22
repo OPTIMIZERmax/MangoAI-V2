@@ -1,7 +1,7 @@
 import logger from './utils/logger.js';
 import { config, validateConfig } from './utils/config.js';
 import { startFileServer } from './utils/fileServer.js';
-import DiscordBot from './bot/discordBot.js';
+import { DiscordBot } from './bot/discordBot.js';
 import SessionManager from './session/sessionManager.js';
 import QueueManager from './queue/queueManager.js';
 import BedrockSolver from './ai/bedrockSolver.js';
@@ -41,8 +41,10 @@ class UltimateAutoCompleter {
    * Initialize all components
    */
   async initialize() {
-    try {
-      logger.info('Initializing Ultimate Auto Completer...');
+  try {
+    console.log("INIT START");
+
+    logger.info('Initializing Ultimate Auto Completer...');
 
       // Validate configuration
       validateConfig();
@@ -59,10 +61,16 @@ class UltimateAutoCompleter {
 
       // Initialize platforms
       this.initializePlatforms();
+      console.log("PLATFORMS OK");
 
       // Initialize Discord bot
       this.bot = new DiscordBot();
-      this.commandHandler = new CommandHandler(this);
+      console.log("DISCORDBOT OK");
+      console.log("CREATING COMMAND HANDLER");
+
+this.commandHandler = new CommandHandler(this);
+
+console.log("COMMAND HANDLER CREATED");
       this.bot.setCommandHandler(this.commandHandler);
       this.bot.setApp(this);
 
@@ -70,7 +78,10 @@ class UltimateAutoCompleter {
       return true;
     } catch (error) {
       const errorData = handleError(error, { context: 'initialization' });
-      throw error;
+
+logger.error(errorData);
+
+throw error;
     }
   }
 
@@ -97,8 +108,11 @@ class UltimateAutoCompleter {
    * Start the application
    */
   async start() {
-    try {
+  try {
+
+    console.log("START FUNCTION ENTERED");
       await this.initialize();
+      console.log("INITIALIZE FINISHED");
 
       // Load previous sessions if persistence is enabled
       if (config.features.persistSessions) {
@@ -112,6 +126,7 @@ class UltimateAutoCompleter {
       if (config.discord.token) {
         try {
           await this.bot.login();
+          console.log("DISCORD LOGIN FINISHED");
           logger.info('✅ Discord bot connected');
 
           // Send startup messages to configured channels
@@ -217,8 +232,15 @@ class UltimateAutoCompleter {
  * Main entry point
  */
 async function main() {
+  console.log("1. MAIN STARTED");
+
   const app = new UltimateAutoCompleter();
+
+  console.log("2. APP CREATED");
+
   await app.start();
+
+  console.log("3. APP START FINISHED");
 }
 
 main().catch((error) => {

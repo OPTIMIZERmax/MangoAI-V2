@@ -1,3 +1,5 @@
+/* eslint-env browser */
+
 import { chromium } from 'playwright-extra';
 import StealthPlugin from 'puppeteer-extra-plugin-stealth';
 import dotenv from 'dotenv';
@@ -175,8 +177,10 @@ async function login({ school, username, password, type } = {}) {
       await safeClick(page, '.sm-button.login-button');
 
       try {
-        await page.waitForLoadState('domcontentloaded', { timeout: 5000 });
-      } catch {}
+  await page.waitForLoadState('domcontentloaded', { timeout: 5000 });
+} catch (_error) {
+  void _error;
+}
     }
     
     addLog('Got past the logins');

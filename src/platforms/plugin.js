@@ -37,21 +37,21 @@ export class Platform {
   /**
    * Solve a question/task
    */
-  async solveQuestion(question, context = {}) {
+  async solveQuestion(question, _context = {}) {
     throw new Error(`solveQuestion() must be implemented by ${this.name}`);
   }
 
   /**
    * Get question details
    */
-  async getQuestion(questionId) {
+  async getQuestion(_questionId) {
     throw new Error(`getQuestion() must be implemented by ${this.name}`);
   }
 
   /**
    * Submit an answer
    */
-  async submitAnswer(questionId, answer) {
+  async submitAnswer(_questionId, _answer) {
     throw new Error(`submitAnswer() must be implemented by ${this.name}`);
   }
 

@@ -38,7 +38,7 @@ export class Seneca extends Platform {
     }
   }
 
-  async solveQuestion(question, context = {}) {
+  async solveQuestion(question, _context = {}) {
     try {
       await this.checkRateLimit(1000);
       logger.info({ platform: this.name }, `Solving: ${question.substring(0, 50)}`);
@@ -63,7 +63,7 @@ export class Seneca extends Platform {
     }
   }
 
-  async submitAnswer(questionId, answer) {
+  async submitAnswer(questionId, _answer) {
     try {
       await this.checkRateLimit(1000);
       logger.info({ platform: this.name, questionId }, 'Submitting answer');

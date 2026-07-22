@@ -10,3 +10,4 @@ apikeys.txt
 apikeys_exhausted.txt
 crash.log
 tools/__pycache__
+*.log

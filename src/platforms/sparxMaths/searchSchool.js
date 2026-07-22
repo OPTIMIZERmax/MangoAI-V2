@@ -82,7 +82,7 @@ function smartFuzzyMatch(textNorm, queryNorm) {
   let start = -1;
   let prev = -2;
 
-  while (true) {
+  for (;;) {
     let matchIdx = textNorm.indexOf(qChar, prev + 1);
     if (matchIdx === -1) break;
 

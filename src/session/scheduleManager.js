@@ -132,7 +132,7 @@ export class ScheduleManager {
     const schedulesToRun = [];
     const now = new Date();
 
-    for (const [userId, userSchedules] of this.schedules) {
+    for (const userSchedules of this.schedules.values()) {
       for (const schedule of userSchedules) {
         if (schedule.isActive && schedule.nextRun && schedule.nextRun <= now) {
           schedulesToRun.push(schedule);

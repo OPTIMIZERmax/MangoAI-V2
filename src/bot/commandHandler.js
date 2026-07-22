@@ -1,4 +1,3 @@
-import logger from '../utils/logger.js';
 import { EmbedFactory, ActionRowFactory } from './embedFactory.js';
 import { EmbedBuilder } from 'discord.js';
 
@@ -6,11 +5,17 @@ import { EmbedBuilder } from 'discord.js';
  * Discord Commands Handler
  */
 export class CommandHandler {
-  constructor(app) {
-    this.app = app;
-    this.commands = new Map();
-    this.registerCommands();
-  }
+
+ constructor(app) {
+
+   console.log("COMMAND HANDLER CONSTRUCTOR START");
+
+   this.app = app;
+   this.commands = new Map();
+
+   console.log("COMMAND HANDLER CONSTRUCTOR END");
+
+ }
 
   registerCommands() {
     // Homework commands
@@ -24,10 +29,6 @@ export class CommandHandler {
     // Premium commands
     this.register('premium', this.handlePremium.bind(this));
     this.register('trial', this.handleTrial.bind(this));
-
-    // Queue commands
-    this.register('queue', this.handleQueue.bind(this));
-    this.register('join', this.handleJoinQueue.bind(this));
 
     // Schedule commands
     this.register('schedule', this.handleSchedule.bind(this));
@@ -133,66 +134,6 @@ export class CommandHandler {
     const buttons = ActionRowFactory.buildQueueButtons(platforms[0]);
 
     return await message.reply({ embeds: [embed], components: [buttons] });
-  }
-
-  /**
-   * Handle join queue command
-   */
-  async handleJoinQueue(message, args) {
-    const userId = message.author.id;
-    const platform = args[0] || 'sparxMaths';
-    const queueSystem = this.app.queueSystem || (this.app.queueSystem = new (await import('../queue/queueSystem.js')).QueueSystem());
-
-    const entry = queueSystem.joinQueue(userId, platform.toLowerCase(), 'solo');
-
-    if (entry.error) {
-      return await message.reply(`❌ ${entry.error} (Position: #${entry.position})`);
-    }
-
-    const embed = new EmbedBuilder()
-      .setColor('#00FF00')
-      .setTitle('✅ Joined Queue')
-      .addFields(
-        { name: 'Platform', value: platform, inline: true },
-        { name: 'Position', value: `#${entry.position}`, inline: true },
-        { name: 'Est. Wait', value: `${entry.estimatedWaitTime} minutes`, inline: true }
-      );
-
-    return await message.reply({ embeds: [embed] });
-  }
-
-  /**
-   * Handle schedule command
-   */
-  async handleSchedule(message, args) {
-    const userId = message.author.id;
-    const scheduleManager = this.app.scheduleManager;
-
-    if (!scheduleManager) {
-      return await message.reply('Schedule manager is not available.');
-    }
-
-    const subcommand = args[0]?.toLowerCase();
-    const buttons = ActionRowFactory.buildScheduleButtons();
-
-    if (subcommand === 'create') {
-      const platform = args[1] || 'sparxMaths';
-      const time = args[2] || '18:00';
-      const days = args.slice(3).length > 0 ? args.slice(3) : ['Monday', 'Wednesday', 'Friday'];
-
-      const schedule = scheduleManager.createSchedule(userId, { platform, time, daysOfWeek: days });
-      const embed = new EmbedBuilder()
-        .setColor('#5865F2')
-        .setTitle('📅 Schedule Created')
-        .setDescription(scheduleManager.formatScheduleInfo(schedule));
-
-      return await this.postToChannelOrReply(message, { embeds: [embed], components: [buttons] }, 'schedule');
-    }
-
-    const schedules = scheduleManager.getUserSchedules(userId);
-    const embed = EmbedFactory.buildScheduleEmbed(schedules);
-
-    return await this.postToChannelOrReply(message, { embeds: [embed], components: [buttons] }, 'schedule');
   }
 
   /**

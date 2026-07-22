@@ -1,4 +1,9 @@
-import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder } from 'discord.js';
+import {
+  ButtonBuilder,
+  ActionRowBuilder,
+  EmbedBuilder,
+  ButtonStyle
+} from 'discord.js';
 
 /**
  * Support Embed Factory
@@ -85,7 +90,9 @@ export class SupportEmbedFactory {
       value: conversationPreview || 'No messages yet',
       inline: false,
     });
-Footer({ text: '🥭 MangoAI • Support status' });
+embed.setFooter({
+  text: '🥭 MangoAI • Support status'
+});
     embed.set
     embed.setTimestamp();
     return embed;

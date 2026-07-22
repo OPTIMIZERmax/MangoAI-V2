@@ -57,7 +57,7 @@ class SparxBase {
                     const err = new Error("Unauthorized");
                     err.response = { status: 401 };
                     throw err;  
-                };
+                }
                 
                 if (grpcMessage?.includes('SessionInactive')) {
                     this.log.logToFile("SESSION INACTIVE CAUGHT!");

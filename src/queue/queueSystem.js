@@ -12,7 +12,7 @@ export class QueueSystem {
   /**
    * Join queue
    */
-  joinQueue(userId, platform, type = 'solo', savedAccounts = []) {
+  joinQueue(userId, platform, type = 'solo', savedAccounts = [], question = null) {
     if (!this.queues.has(platform)) {
       this.queues.set(platform, []);
     }
@@ -33,6 +33,7 @@ export class QueueSystem {
       savedAccounts,
       status: 'waiting', // waiting, processing, completed
       estimatedWaitTime: this._calculateWaitTime(queue),
+      question,
     };
 
     queue.push(queueEntry);

@@ -62,7 +62,9 @@ async function smartLogin(page, email, password, loginType = 'Normal', landedFun
 
         try { 
             await page.locator(ALL_INTERACTIVE).first().waitFor({ state: 'visible', timeout: 500 }); 
-        } catch { }
+        } catch (_error) {
+    // Ignore timeout
+}
 
         // 4. Speedbump Handling
         if (url.includes('samlconfirmaccount') || url.includes('speedbump')) {
@@ -74,7 +76,9 @@ async function smartLogin(page, email, password, loginType = 'Normal', landedFun
                     await page.waitForLoadState('networkidle', { timeout: 1000 }).catch(() => { });
                     continue;
                 }
-            } catch { }
+            } catch (_error) {
+    // Ignore if button isn't available
+}
         }
 
         // 5. Error Detection
@@ -108,7 +112,9 @@ async function smartLogin(page, email, password, loginType = 'Normal', landedFun
                     log('Password field detected empty. Retrying typing...');
                     filledPassword = false;
                 }
-            } catch { }
+            } catch (_error) {
+    // Ignore password read failure
+}
         }
 
         // 6. Handle 2FA Prompt (Commented but ported logic to Playwright APIs just in case)
@@ -217,7 +223,9 @@ async function smartLogin(page, email, password, loginType = 'Normal', landedFun
                         filledEmail = true;
                     }
                 }
-            } catch { }
+            } catch (_error) {
+    // Ignore email input errors
+}   
         }
 
         // 8. Handle Password
@@ -236,7 +244,9 @@ async function smartLogin(page, email, password, loginType = 'Normal', landedFun
                     await page.keyboard.press('Enter');
                     continue;
                 }
-            } catch { }
+            } catch (_error) {
+    // Ignore password input errors
+}
         }
 
         // 9. Click Next/Submit
@@ -259,7 +269,9 @@ async function smartLogin(page, email, password, loginType = 'Normal', landedFun
                     break;
                 }
             }
-        } catch { }
+        } catch (_error) {
+    // Ignore submit button errors
+}
     }
 
     return { filledEmail, filledPassword };

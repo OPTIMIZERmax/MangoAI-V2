@@ -5,6 +5,16 @@ import { fileURLToPath } from 'url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.join(__dirname, '../../.env') });
 
+console.log(
+  "ENV PATH:",
+  path.join(__dirname, '../../.env')
+);
+
+console.log(
+  "TOKEN:",
+  process.env.DISCORD_TOKEN ? "FOUND" : "MISSING"
+);
+
 export const config = {
   // Discord
   discord: {
