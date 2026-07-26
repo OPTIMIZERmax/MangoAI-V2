@@ -50,14 +50,31 @@ class UltimateAutoCompleter {
       validateConfig();
 
       // Initialize components
-      this.sessionManager = new SessionManager(config.features.persistSessions);
-      this.queueManager = new QueueManager();
-      this.bedrockSolver = new BedrockSolver();
-      this.homeworkTracker = new HomeworkTracker();
-      this.premiumManager = new PremiumManager();
-      this.scheduleManager = new ScheduleManager();
-      this.queueSystem = new QueueSystem();
-      this.supportManager = new SupportManager();
+      console.log("Creating SessionManager");
+this.sessionManager = new SessionManager(config.features.persistSessions);
+
+console.log("Creating QueueManager");
+this.queueManager = new QueueManager();
+
+console.log("Creating BedrockSolver");
+this.bedrockSolver = new BedrockSolver();
+
+console.log("Creating HomeworkTracker");
+this.homeworkTracker = new HomeworkTracker();
+
+console.log("Creating PremiumManager");
+this.premiumManager = new PremiumManager();
+
+console.log("Creating ScheduleManager");
+this.scheduleManager = new ScheduleManager();
+
+console.log("Creating QueueSystem");
+this.queueSystem = new QueueSystem();
+
+console.log("Creating SupportManager");
+this.supportManager = new SupportManager();
+
+console.log("All managers created");
 
       // Initialize platforms
       this.initializePlatforms();

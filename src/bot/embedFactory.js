@@ -1,43 +1,158 @@
-import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
+import { 
+  EmbedBuilder, 
+  ActionRowBuilder, 
+  ButtonBuilder, 
+  ButtonStyle, 
+  StringSelectMenuBuilder,
+  StringSelectMenuOptionBuilder,
+  StringSelectMenuInteraction,
+  ContainerBuilder,
+  TextDisplayBuilder,
+  SeparatorBuilder,
+  SeparatorSpacingSize
+} from 'discord.js';
+
+export class ContainerFactory {
+  static buildLearningPlatformContainer() {
+    const container = new ContainerBuilder()
+      .setAccentColor(16032512) // #F4A300 decimal value
+      .addTextDisplayComponents(
+        new TextDisplayBuilder().setContent("# Choose a Platform\n\n> Select the service you want to join.\n> MangoAI will open the correct login flow for that platform.")
+      )
+      .addSeparatorComponents(
+        new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small).setDivider(true)
+      )
+      .addTextDisplayComponents(
+        new TextDisplayBuilder().setContent("👇 **Select a platform below**")
+      )
+      .addActionRowComponents(
+        new ActionRowBuilder().addComponents(
+          new StringSelectMenuBuilder()
+            .setCustomId("platform_select")
+            .setPlaceholder("Select a Platform")
+            .addOptions(
+              new StringSelectMenuOptionBuilder().setLabel("Sparx Maths").setValue("join_sparxMaths").setEmoji({ name: "📚" }),
+              new StringSelectMenuOptionBuilder().setLabel("Sparx Reader").setValue("join_sparxReader").setEmoji({ name: "📖" }),
+              new StringSelectMenuOptionBuilder().setLabel("Sparx Science").setValue("join_sparxScience").setEmoji({ name: "🔬" })
+            )
+        )
+      );
+
+    return [container];
+  }
+}
+
+export const platformLoginData = {
+  sparxMaths: {
+    name: "Sparx Maths",
+    emoji: "<:SparxMaths:1515672129188790302>",
+    description: "Login to your Sparx Maths account."
+  },
+  sparxReader: {
+    name: "Sparx Reader",
+    emoji: "<:SparxReader:1515672202375204945>",
+    description: "Login to your Sparx Reader account."
+  },
+  sparxScience: {
+    name: "Sparx Science",
+    emoji: "<:SparxScience:1515672274051797072>",
+    description: "Login to your Sparx Science account."
+  },
+  languagenut: {
+    name: "LanguageNut",
+    emoji: "<:LanguageNut:1515672374878670858>",
+    description: "Login to your LanguageNut account."
+  },
+  bedrock: {
+    name: "Bedrock",
+    emoji: "<:Bedrock:1529265581273124935>",
+    description: "Login to your Bedrock account."
+  },
+  seneca: {
+    name: "Seneca",
+    emoji: "<:Seneca:1515672492512120963>",
+    description: "Login to your Seneca account."
+  }
+};
 
 /**
  * Discord Embed Builders for rich UI
  */
 export class EmbedFactory {
-  /**
-   * Build progress bar
-   */
   static buildProgressBar(progress, length = 20) {
     const filled = Math.round((progress / 100) * length);
     const empty = length - filled;
     return `${'█'.repeat(filled)}${'░'.repeat(empty)} ${progress}%`;
   }
 
+  static buildLoginEmbed(platform) {
+  const data = platformLoginData[platform];
+
+  if (!data) {
+    return new EmbedBuilder()
+      .setColor('#FF0000')
+      .setTitle('❌ Unknown Platform')
+      .setDescription('This platform is not supported.')
+      .setFooter({
+        text: '🥭 MangoAI V2'
+      });
+  }
+
+  return new EmbedBuilder()
+    .setColor('#5865F2')
+    .setTitle(`${data.emoji} ${data.name} Login`)
+    .setDescription(
+      `**Login**\n\n` +
+      `${data.description}\n\n` +
+      `Choose how you want to connect your account:\n\n` +
+      `🔑 **Login**\nEnter your username and password.\n\n` +
+      `🍪 **Login with Cookies**\nUse your saved session cookies.\n\n` +
+      `💾 **Saved Accounts**\nSelect from your previously saved accounts.`
+    )
+    .addFields(
+      {
+        name: 'Platform',
+        value: `${data.emoji} ${data.name}`,
+        inline: true
+      },
+      {
+        name: 'Status',
+        value: '🟢 Online',
+        inline: true
+      }
+    )
+    .setTimestamp()
+    .setFooter({
+      text: '🥭 MangoAI V2'
+    });
+}
+  
   /**
    * Build MangoAI Learning Platform embed - Clean & Professional
    */
   static buildLearningPlatformEmbed() {
-    const embed = new EmbedBuilder()
-      .setColor('#5865F2')
-      .setTitle('🥭 MangoAI Learning Platform')
-      .setDescription('**Your gateway to personalised AI tutoring assistance**\n\nOur verified AI tutors are available to help you across multiple fields of study. Connect with qualified assistance in real-time and solve your most challenging problems.')
-      .setImage('attachment://standard.gif')
-      .addFields(
-        {
-          name: '✨ Key Features',
-          value: '🔹 Personalised tutoring for all subjects\n🔹 Real-time expert assistance\n🔹 Solves top 5% most difficult problems\n🔹 Secure & confidential sessions',
-          inline: false,
-        },
-        {
-          name: '⚡ Quick Start',
-          value: 'Press **Join Queue** below to connect with a tutor now',
-          inline: false,
-        }
+    return new EmbedBuilder()
+      .setColor('#2B2D31')
+      .setTitle('MangoAI Learning Platform')
+      .setDescription(
+        '**[FAQ ↗](https://discord.com)**\n\n' +
+        '> Your gateway to personalised AI\n' +
+        '> tutoring assistance.\n' +
+        '> \n' +
+        '> Our verified tutors are available to\n' +
+        '> help you across multiple fields of\n' +
+        '> study.\n\n' +
+        'Press the `Join Queue` button below to connect with a qualified tutor.\n\n' +
+        '__**Notes**__\n' +
+        '• Get personalised help for all your questions\n' +
+        '• Connect with experienced tutors in real-time\n' +
+        '• Solves the top 5% most difficult problems\n' +
+        '• Secure and confidential tutoring sessions'
       )
-      .setTimestamp()
-      .setFooter({ text: '🥭 MangoAI • Powered by AI Tutors' });
-    return embed;
+      .setThumbnail('attachment://standard.gif');
   }
+
+
 
   /**
    * Build homework progress embed
@@ -250,23 +365,23 @@ export class EmbedFactory {
  */
 export class ActionRowFactory {
   static buildLearningPlatformButtons() {
-    // Row 1: Join Queue buttons
+    // Row 1
     const row1 = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setCustomId('platform_join_queue')
         .setLabel('Join Queue')
-        .setStyle(ButtonStyle.Primary),
+        .setStyle(ButtonStyle.Secondary), // Changed to Gray
       new ButtonBuilder()
         .setCustomId('platform_join_saved')
-        .setLabel('Join with Saved Accounts')
+        .setLabel('Saved Accounts')
         .setStyle(ButtonStyle.Secondary),
       new ButtonBuilder()
         .setCustomId('platform_join_group')
-        .setLabel('Join with Group')
+        .setLabel('Group Queue')
         .setStyle(ButtonStyle.Secondary)
     );
 
-    // Row 2: Status and Info buttons
+    // Row 2
     const row2 = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setCustomId('platform_check_queue')
@@ -279,27 +394,28 @@ export class ActionRowFactory {
       new ButtonBuilder()
         .setCustomId('platform_view_slots')
         .setLabel('View Slots')
-        .setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder()
-        .setCustomId('platform_history')
-        .setLabel('History')
         .setStyle(ButtonStyle.Secondary)
     );
 
-    // Row 3: Settings and feedback
+    // Row 3
     const row3 = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
+        .setCustomId('platform_history')
+        .setLabel('History')
+        .setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder()
         .setCustomId('platform_settings')
-        .setLabel('⚙️ Settings')
-        .setStyle(ButtonStyle.Primary),
+        .setLabel('Settings')
+        .setStyle(ButtonStyle.Secondary), // Changed to Gray
       new ButtonBuilder()
         .setCustomId('platform_feedback')
-        .setLabel('💬 Feedback & Suggestions')
+        .setLabel('Feedback')
         .setStyle(ButtonStyle.Secondary)
     );
 
     return [row1, row2, row3];
   }
+
 
   static buildAutoScheduleButtons() {
     return new ActionRowBuilder().addComponents(
@@ -326,6 +442,26 @@ export class ActionRowFactory {
         .setStyle(ButtonStyle.Secondary)
     );
   }
+
+  static buildLoginButtons(platform) {
+  return new ActionRowBuilder()
+    .addComponents(
+      new ButtonBuilder()
+        .setCustomId(`login_${platform}`)
+        .setLabel('🔑 Login')
+        .setStyle(ButtonStyle.Primary),
+
+      new ButtonBuilder()
+        .setCustomId(`cookies_${platform}`)
+        .setLabel('🍪 Cookies')
+        .setStyle(ButtonStyle.Secondary),
+
+      new ButtonBuilder()
+        .setCustomId(`saved_${platform}`)
+        .setLabel('💾 Saved Accounts')
+        .setStyle(ButtonStyle.Success)
+    );
+}
 
   static buildQueueButtons(platform) {
     return new ActionRowBuilder().addComponents(
@@ -401,4 +537,8 @@ export class ActionRowFactory {
   }
 }
 
-export default { EmbedFactory, ActionRowFactory };
+export default {
+  EmbedFactory,
+  ActionRowFactory,
+  platformLoginData
+};

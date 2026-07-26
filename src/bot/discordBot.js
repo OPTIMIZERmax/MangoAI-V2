@@ -3,14 +3,24 @@
 import {
   Client,
   GatewayIntentBits,
+  Partials,
   EmbedBuilder,
   ActivityType,
-  AttachmentBuilder
+  AttachmentBuilder,
+  ModalBuilder,
+  TextInputBuilder,
+  TextInputStyle,
+  ActionRowBuilder,
+  StringSelectMenuBuilder,
+  ButtonBuilder,
+  ButtonStyle,
+  MessageFlags
 } from 'discord.js';
 
 import {
   EmbedFactory,
-  ActionRowFactory
+  ActionRowFactory,
+  ContainerFactory,
 } from './embedFactory.js';
 
 import logger from '../utils/logger.js';
@@ -90,7 +100,64 @@ export class DiscordBot {
   }
 
 
+  async handlePlatformSelect(interaction) {
+    // Get selected value (e.g., 'join_sparxMaths')
+    const action = interaction.values[0];
+    
+    // Extract the platform string by removing the 'join_' prefix
+    const selectedPlatform = action.replace("join_", "");
 
+    const platformMap = {
+        sparxMaths: "Sparx Maths",
+        sparxReader: "Sparx Reader",
+        sparxScience: "Sparx Science",
+        languagenut: "LanguageNut",
+        bedrock: "Bedrock",
+        seneca: "Seneca"
+    };
+
+    const platformName = platformMap[selectedPlatform];
+
+    const embed = new EmbedBuilder()
+        .setColor("#F4A300")
+        .setTitle(`🔑 ${platformName} Login`)
+        .setDescription(
+`**${platformName} selected**
+
+Choose your login method below.
+
+MangoAI will securely open the correct login flow.`
+        )
+        .setFooter({
+            text: "🥭 MangoAI"
+        });
+
+    const row = new ActionRowBuilder()
+        .addComponents(
+            new ButtonBuilder()
+                .setCustomId(`login_${selectedPlatform}`)
+                .setLabel("Login")
+                .setEmoji("🔑")
+                .setStyle(ButtonStyle.Primary),
+
+            new ButtonBuilder()
+                .setCustomId(`cookies_${selectedPlatform}`)
+                .setLabel("Login with Cookies")
+                .setEmoji("🍪")
+                .setStyle(ButtonStyle.Secondary),
+
+            new ButtonBuilder()
+                .setCustomId(`saved_${selectedPlatform}`)
+                .setLabel("Saved Accounts")
+                .setEmoji("💾")
+                .setStyle(ButtonStyle.Success)
+        );
+
+    return this.respondToInteraction(interaction, {
+        embeds: [embed],
+        components: [row]
+    });
+  }
 
 
   setupEventHandlers() {
@@ -98,8 +165,8 @@ export class DiscordBot {
 
 
     this.client.once(
-      'clientReady',
-      () => {
+'clientReady',
+()=>{
 
 
         logger.info(
@@ -317,79 +384,124 @@ export class DiscordBot {
 
 
     this.client.on(
-      'interactionCreate',
-      async (interaction) => {
+  'interactionCreate',
+  async (interaction) => {
 
+
+    try {
+
+
+      // BUTTONS
+      if (interaction.isButton()) {
 
 
         if (
+  interaction.customId.startsWith("login_")
+) {
 
-          !interaction.isButton()
-
-        )
-
-          return;
-
-
-
-
-
-        try {
+  const platform =
+    interaction.customId.replace(
+      "login_",
+      ""
+    );
 
 
-          await this.handleButtonInteraction(
+  try {
 
+    return await this.openLoginModal(
+      interaction,
+      platform
+    );
+
+  } catch(error) {
+
+    logger.error(
+      {
+        error: error.message,
+        stack: error.stack
+      },
+      "Failed opening login modal"
+    );
+
+  }
+
+        }
+
+        return this.handleButtonInteraction(
+          interaction
+        );
+
+
+      }
+
+
+
+      // MODALS
+      if (
+        interaction.isModalSubmit()
+      ) {
+
+
+        return this.handleLoginModal(
+          interaction
+        );
+
+
+      }
+
+
+
+      // SELECT MENUS
+      if (
+    interaction.isStringSelectMenu()
+) {
+
+    if (interaction.customId === "platform_select") {
+
+        return this.handlePlatformSelect(
             interaction
+        );
 
-          );
-
-
-
-        } catch (error) {
+    }
 
 
+    return this.handleLoginTypeSelect(
+        interaction
+    );
 
-          logger.error(
-
-            {
-
-              error: error.message,
-
-              customId: interaction.customId
-
-            },
-
-            'Button error'
-
-          );
+}
 
 
 
+    } catch(error) {
+
+
+      logger.error(
+        {
+          error: error.message,
+          customId: interaction.customId
+        },
+        'Interaction error'
+      );
 
 
 
-          if (
-
-            interaction.replied ||
-
-            interaction.deferred
-
-          ) {
+      if (
+        interaction.replied ||
+        interaction.deferred
+      ) {
 
 
+        await interaction.followUp({
 
-            await interaction.followUp({
+          content:
+            '❌ Something went wrong.',
 
-              content:
+          ephemeral:true
 
-                '❌ Button error',
-
-              ephemeral: true
-
-            });
-
-
-
+        }).catch(
+          ()=>{}
+        );
 
           } else {
 
@@ -401,7 +513,7 @@ export class DiscordBot {
 
                 '❌ Button error',
 
-              ephemeral: true
+              flags: MessageFlags.Ephemeral
 
             });
 
@@ -504,7 +616,7 @@ export class DiscordBot {
         .setFooter({
 
           text:
-            'SENAI Learning Platform'
+            'MangoAI Learning Platform'
 
         });
 
@@ -543,7 +655,99 @@ export class DiscordBot {
 
 
 
+  async handleLoginModal(interaction) {
 
+    const platform =
+    interaction.customId
+        .replace(
+            "school_login_",
+            ""
+        );
+
+
+    const school =
+        interaction.fields.getTextInputValue(
+            "school"
+        );
+
+
+    const login =
+        interaction.fields.getTextInputValue(
+            "login"
+        );
+
+
+    const password =
+        interaction.fields.getTextInputValue(
+            "password"
+        );
+
+
+    await interaction.reply({
+
+        content:
+`
+✅ Login received
+
+Platform:
+**${platform}**
+
+School:
+**${school}**
+
+Username:
+**${login}**
+
+Password:
+Received ✅
+`,
+
+        ephemeral:true
+
+    });
+
+}
+
+  async handleLoginTypeSelect(interaction){
+
+
+const [
+type,
+platform,
+login
+] =
+interaction.customId.split("_");
+
+
+
+const choice =
+interaction.values[0];
+
+
+
+await interaction.update({
+
+content:
+
+`🔑 Login method selected:
+
+Platform:
+${platform}
+
+Account:
+${login}
+
+Method:
+${choice}
+
+Processing...`,
+
+components:[]
+
+});
+
+
+}
 
   async handleCommand(
     command,
@@ -1629,88 +1833,10 @@ export class DiscordBot {
 
 
       case 'join_queue': {
-  const {
-    ActionRowBuilder,
-    ButtonBuilder,
-    ButtonStyle,
-    EmbedBuilder
-  } = await import("discord.js");
-
-  const embed = new EmbedBuilder()
-    .setColor("#5865F2")
-    .setTitle("📚 Select a Platform")
-    .setDescription("Choose the homework platform you want to join.")
-    .addFields(
-      {
-        name: "<:SparxMaths:1515672129188790302> Sparx Maths",
-        value: "🟢 Online",
-        inline: true
-      },
-      {
-        name: "<:SparxReader:1515672202375204945> Sparx Reader",
-        value: "🟢 Online",
-        inline: true
-      },
-      {
-        name: "<:SparxScience:1515672274051797072> Sparx Science",
-        value: "🟢 Online",
-        inline: true
-      },
-      {
-        name: "<:LanguageNut:1515672374878670858> LanguageNut",
-        value: "🟢 Online",
-        inline: true
-      },
-      {
-        name: "<:Bedrock:1529265581273124935> Bedrock",
-        value: "🟢 Online",
-        inline: true
-      },
-      {
-        name: "<:Seneca:1515672492512120963> Seneca",
-        value: "🟢 Online",
-        inline: true
-      }
-    );
-
-  const row1 = new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId("platform_join_sparxMaths")
-      .setLabel("Sparx Maths")
-      .setStyle(ButtonStyle.Primary),
-
-    new ButtonBuilder()
-      .setCustomId("platform_join_sparxReader")
-      .setLabel("Sparx Reader")
-      .setStyle(ButtonStyle.Primary),
-
-    new ButtonBuilder()
-      .setCustomId("platform_join_sparxScience")
-      .setLabel("Sparx Science")
-      .setStyle(ButtonStyle.Primary)
-  );
-
-  const row2 = new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId("platform_join_languagenut")
-      .setLabel("LanguageNut")
-      .setStyle(ButtonStyle.Success),
-
-    new ButtonBuilder()
-      .setCustomId("platform_join_bedrock")
-      .setLabel("Bedrock")
-      .setStyle(ButtonStyle.Success),
-
-    new ButtonBuilder()
-      .setCustomId("platform_join_seneca")
-      .setLabel("Seneca")
-      .setStyle(ButtonStyle.Success)
-  );
-
-  return this.respondToInteraction(interaction, {
-    embeds: [embed],
-    components: [row1, row2]
-  });
+    return this.respondToInteraction(interaction, {
+        flags: MessageFlags.IsComponentsV2,
+        components: ContainerFactory.buildLearningPlatformContainer()
+    });
 }
 
 case "join_sparxMaths":
@@ -1735,31 +1861,37 @@ case "join_seneca": {
     }
 
     const platformMap = {
-        sparxMaths: {
-            name: 'Sparx Maths',
-            key: 'sparxMaths'
-        },
-        sparxReader: {
-            name: 'Sparx Reader',
-            key: 'sparxReader'
-        },
-        sparxScience: {
-            name: 'Sparx Science',
-            key: 'sparxScience'
-        },
-        languagenut: {
-            name: 'LanguageNut',
-            key: 'languagenut'
-        },
-        bedrock: {
-            name: 'Bedrock',
-            key: 'bedrock'
-        },
-        seneca: {
-            name: 'Seneca',
-            key: 'seneca'
-        }
-    };
+    sparxMaths: {
+        name: "Sparx Maths",
+        key: "sparxMaths",
+        emoji: "<:SparxMaths:1515672129188790302>"
+    },
+    sparxReader: {
+        name: "Sparx Reader",
+        key: "sparxReader",
+        emoji: "<:SparxReader:1515672202375204945>"
+    },
+    sparxScience: {
+        name: "Sparx Science",
+        key: "sparxScience",
+        emoji: "<:SparxScience:1515672274051797072>"
+    },
+    languagenut: {
+        name: "LanguageNut",
+        key: "languagenut",
+        emoji: "<:LanguageNut:1515672374878670858>"
+    },
+    bedrock: {
+        name: "Bedrock",
+        key: "bedrock",
+        emoji: "<:Bedrock:1529265581273124935>"
+    },
+    seneca: {
+        name: "Seneca",
+        key: "seneca",
+        emoji: "<:Seneca:1515672492512120963>"
+    }
+};
 
     const platform = platformMap[selectedPlatform];
 
@@ -1774,28 +1906,57 @@ case "join_seneca": {
 
     }
 
-    const entry = queueSystem.joinQueue(
-        userId,
-        platform.key
-    );
+    // Save selected platform for login step
+if (!this.pendingLogins) {
+    this.pendingLogins = new Map();
+}
 
-    if (entry.error) {
+this.pendingLogins.set(userId, {
+    platform: platform.key,
+    name: platform.name,
+    createdAt: Date.now()
+});
 
-        return this.respondToInteraction(
-            interaction,
-            {
-                content: `❌ ${entry.error}`
-            }
-        );
+setTimeout(()=>{
+ this.pendingLogins.delete(userId);
+},300000);
 
-    }
+const embed = new EmbedBuilder()
+    .setColor("#F4A300")
+    .setTitle(`${platform.emoji} ${platform.name} Login`)
+    .setDescription(
+        "**Login by simply inputting your username and password, logging in with cookies, or choosing one of your saved accounts.**"
+    )
+    .setFooter({
+        text: "🥭 MangoAI"
+    });
 
-    return this.respondToInteraction(
-        interaction,
-        {
-            content: `✅ You joined the **${platform.name}** queue successfully.\n\nUse **Check Queue** to view your position.`
-        }
-    );
+const row = new ActionRowBuilder().addComponents(
+
+    new ButtonBuilder()
+        .setCustomId(`login_${selectedPlatform}`)
+        .setLabel("Login")
+        .setEmoji("🔑")
+        .setStyle(ButtonStyle.Primary),
+
+    new ButtonBuilder()
+        .setCustomId(`cookies_${selectedPlatform}`)
+        .setLabel("Login with Cookies")
+        .setEmoji("🍪")
+        .setStyle(ButtonStyle.Secondary),
+
+    new ButtonBuilder()
+        .setCustomId(`saved_${selectedPlatform}`)
+        .setLabel("Saved Accounts")
+        .setEmoji("💾")
+        .setStyle(ButtonStyle.Success)
+
+);
+
+return this.respondToInteraction(interaction, {
+    embeds: [embed],
+    components: [row]
+});
 
 }
 
@@ -1818,73 +1979,6 @@ case "join_seneca": {
 
       }
 
-      case 'join_sparxMaths':
-case 'join_sparxReader':
-case 'join_sparxScience':
-case 'join_languagenut':
-case 'join_bedrock':
-case 'join_seneca': {
-
-    if (!queueSystem) {
-        return this.respondToInteraction(interaction, {
-            content: 'Queue system is not available.'
-        });
-    }
-
-    const selectedPlatform = action.replace("join_", "");
-
-    const platformMap = {
-        sparxMaths: {
-            name: 'Sparx Maths',
-            key: 'sparxMaths'
-        },
-        sparxReader: {
-            name: 'Sparx Reader',
-            key: 'sparxReader'
-        },
-        sparxScience: {
-            name: 'Sparx Science',
-            key: 'sparxScience'
-        },
-        languagenut: {
-            name: 'LanguageNut',
-            key: 'languagenut'
-        },
-        bedrock: {
-            name: 'Bedrock',
-            key: 'bedrock'
-        },
-        seneca: {
-            name: 'Seneca',
-            key: 'seneca'
-        }
-    };
-
-    const platform = platformMap[selectedPlatform];
-
-    if (!platform) {
-        return this.respondToInteraction(interaction, {
-            content: '❌ Unknown platform.'
-        });
-    }
-
-    const entry = queueSystem.joinQueue(
-        userId,
-        platform.key
-    );
-
-    if (entry.error) {
-        return this.respondToInteraction(interaction, {
-            content: `❌ ${entry.error}`
-        });
-    }
-
-    return this.respondToInteraction(interaction, {
-        content:
-            `✅ You joined the **${platform.name}** queue.\n\nPress **Check Queue** to see your position.`
-    });
-
-}
       case 'check_queue': {
 
   if (!queueSystem) {
@@ -2383,7 +2477,7 @@ case 'join_seneca': {
   try {
 
     await interaction.deferReply({
-      ephemeral: true
+      flags: MessageFlags.Ephemeral
     });
 
 
@@ -2454,7 +2548,7 @@ case 'join_seneca': {
     return interaction.reply(
   {
     ...payload,
-    ephemeral: true
+    flags: MessageFlags.Ephemeral
   }
 )
 
@@ -3351,43 +3445,17 @@ case 'join_seneca': {
 
 
 
-        const deletePromises =
+       const deleteResults =
+  await Promise.allSettled(
+    messages.map(
+      msg => msg.delete()
+    )
+  );
 
-          messages.map(
-
-            msg =>
-
-              msg.delete()
-
-                .catch(
-
-                  () => null
-
-                )
-
-          );
-
-
-
-
-
-        await Promise.all(
-
-          deletePromises
-
-        );
-
-
-
-
-
-        deleted +=
-
-          deletePromises.length;
-
-
-
-
+deleted +=
+  deleteResults.filter(
+    result => result.status === "fulfilled"
+  ).length;
 
         await new Promise(
 
@@ -3501,159 +3569,25 @@ case 'join_seneca': {
 
 
 
-      if (channels.learningPlatform)
-
-        await this.clearChannelMessages(
-
-          'learningPlatform'
-
-        );
-
-
-
-
-
-      if (channels.autoSchedule)
-
-        await this.clearChannelMessages(
-
-          'autoSchedule'
-
-        );
-
-
-
-
-
-      if (channels.supportTickets)
-
-        await this.clearChannelMessages(
-
-          'supportTickets'
-
-        );
-
-
-
-
-
-      await new Promise(
-
-        resolve =>
-
-          setTimeout(
-
-            resolve,
-
-            1000
-
-          )
-
-      );
-
-
-
-
-
-      logger.info(
-
-        '📤 Sending fresh startup messages...'
-
-      );
-
-
-
-
-
       if (channels.learningPlatform) {
 
+        let payload = {
+          flags: MessageFlags.IsComponentsV2,
+          components: ContainerFactory.buildLearningPlatformContainer()
+        };
 
+        const gifPath = path.join(__dirname, '../../standard.gif');
 
-        const platformEmbed =
-
-          EmbedFactory.buildLearningPlatformEmbed();
-
-
-
-
-
-        const platformButtons =
-
-          ActionRowFactory.buildLearningPlatformButtons();
-
-        const gifPath =
-
-          path.join(
-
-            __dirname,
-
-            '../../standard.gif'
-
-          );
-
-        let payload =
-
-          {
-
-            embeds:
-
-              [
-
-                platformEmbed
-
-              ],
-
-
-            components:
-
-              platformButtons
-
-          };
-
-
-        if (
-
-          fs.existsSync(
-
-            gifPath
-
-          )
-
-        ) {
-
-          const gifAttachment =
-
-            new AttachmentBuilder(
-
-              gifPath,
-
-              {
-
-                name:
-
-                  'standard.gif'
-
-              }
-
-            );
-
-          payload.files =
-
-            [
-
-              gifAttachment
-
-            ];
-
-
+        if (fs.existsSync(gifPath)) {
+          const gifAttachment = new AttachmentBuilder(gifPath, {
+            name: 'standard.gif'
+          });
+          payload.files = [gifAttachment];
         }
 
         await this.sendToConfiguredChannel(
-
           'learningPlatform',
-
           payload
-
         )
 
         .catch(
@@ -3971,53 +3905,98 @@ case 'join_seneca': {
 
 
   }
+  
+    async openLoginModal(interaction, platform) {
 
-    async close() {
-
-
-    try {
-
-
-      await this.client.destroy();
+    const modal = new ModalBuilder()
+        .setCustomId(`school_login_${platform}`)
+        .setTitle("Login with your school credentials");
 
 
-
-      logger.info(
-
-        'Discord bot disconnected'
-
-      );
-
-
-
-    } catch (error) {
+    const platformInput =
+        new TextInputBuilder()
+            .setCustomId("platform")
+            .setLabel("Platform")
+            .setStyle(TextInputStyle.Short)
+            .setValue(platform)
+            .setRequired(false);
 
 
-      logger.error(
-
-        {
-
-          error:
-
-            error.message
-
-        },
-
-        'Error closing Discord bot'
-
-      );
+    const school =
+        new TextInputBuilder()
+            .setCustomId("school")
+            .setLabel("School")
+            .setStyle(TextInputStyle.Short)
+            .setPlaceholder("Your school name")
+            .setRequired(true);
 
 
-    }
+    const login =
+        new TextInputBuilder()
+            .setCustomId("login")
+            .setLabel("Username / Email")
+            .setStyle(TextInputStyle.Short)
+            .setPlaceholder("Email / Username")
+            .setRequired(true);
 
 
-  }
+    const password =
+        new TextInputBuilder()
+            .setCustomId("password")
+            .setLabel("Password")
+            .setStyle(TextInputStyle.Short)
+            .setPlaceholder("Password")
+            .setRequired(true);
 
+
+
+    modal.addComponents(
+      
+        new ActionRowBuilder()
+            .addComponents(school),
+
+        new ActionRowBuilder()
+            .addComponents(login),
+
+        new ActionRowBuilder()
+            .addComponents(password)
+
+    );
+
+
+    await interaction.showModal(modal);
 
 }
 
 
 
+  async close() {
+
+    try {
+
+      await this.client.destroy();
+
+
+      logger.info(
+        "Discord bot disconnected"
+      );
+
+
+    } catch (error) {
+
+      logger.error(
+        {
+          error: error.message
+        },
+        "Error closing Discord bot"
+      );
+
+    }
+
+  }
+
+
+ }
 
 
 export default DiscordBot;

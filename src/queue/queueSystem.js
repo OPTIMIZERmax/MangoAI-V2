@@ -5,9 +5,8 @@ import logger from '../utils/logger.js';
  */
 export class QueueSystem {
   constructor() {
-    this.queues = new Map(); // platform -> queue
-    this.users = new Map(); // userId -> { position, joinedAt, platform }
-  }
+  this.queues = new Map(); // platform -> queue
+}
 
   /**
    * Join queue
