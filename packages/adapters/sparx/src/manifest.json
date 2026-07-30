@@ -1,0 +1,9 @@
+{
+  "id": "sparx",
+  "name": "Sparx Adapter",
+  "version": "1.0.0-alpha",
+  "engineRange": "^1.0.0-alpha",
+  "capabilities": [
+    "browser"
+  ]
+}

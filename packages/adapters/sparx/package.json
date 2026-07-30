@@ -1,0 +1,11 @@
+{
+  "name": "@mango/sparx-adapter",
+  "version": "1.0.0-alpha",
+  "type": "module",
+  "main": "src/index.js",
+  "description": "Mango Sparx adapter",
+  "dependencies": {
+    "@mango/engine": "1.0.0-alpha",
+    "playwright": "^1.62.1"
+  }
+}

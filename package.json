@@ -43,5 +43,10 @@
   "allowScripts": {
     "puppeteer@25.3.0": true,
     "msgpackr-extract@3.0.4": true
-  }
+  },
+  "workspaces": [
+    "packages/*",
+    "packages/adapters/*"
+  ]
 }
+

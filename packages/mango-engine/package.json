@@ -1,0 +1,10 @@
+{
+  "name": "@mango/engine",
+  "version": "1.0.0-alpha",
+  "description": "Mango Automation Engine",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "test": "node tests/index.js"
+  }
+}
