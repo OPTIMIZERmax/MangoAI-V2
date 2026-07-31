@@ -14,7 +14,7 @@ console.log("Registered:", sparx.metadata);
 
 const result = await registry.execute(
   "sparx",
-  { action: "test" },
+  { action: "login-page" },
   {
     reportProgress: async (p, msg) => {
       console.log(`${p}% - ${msg}`);

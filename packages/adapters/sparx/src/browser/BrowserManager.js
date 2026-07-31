@@ -29,6 +29,30 @@ export class BrowserManager {
     return this.page.url();
   }
 
+  getBrowser() {
+  if (!this.browser) {
+    throw new Error("Browser has not been initialized.");
+  }
+
+  return this.browser;
+}
+
+getContext() {
+  if (!this.context) {
+    throw new Error("Browser context has not been initialized.");
+  }
+
+  return this.context;
+}
+
+getPage() {
+  if (!this.page) {
+    throw new Error("Browser page has not been initialized.");
+  }
+
+  return this.page;
+}
+  
   async shutdown() {
     if (this.browser) {
       await this.browser.close();

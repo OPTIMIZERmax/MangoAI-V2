@@ -1,11 +1,21 @@
 import { BaseAdapter } from "@mango/engine";
 import { BrowserManager } from "./browser/BrowserManager.js";
+import { SparxClient } from "./services/SparxClient.js";
+import { SessionManager } from "./auth/SessionManager.js";
+import TaskRunner from "./tasks/TaskRunner.js";
 
 export class SparxAdapter extends BaseAdapter {
   constructor() {
     super();
 
     this.browserManager = new BrowserManager();
+    this.client = new SparxClient(this.browserManager);
+    this.sessionManager = new SessionManager(this.browserManager);
+
+    this.taskRunner = new TaskRunner(
+      this.client,
+      this.sessionManager
+    );
   }
 
   get metadata() {
@@ -29,18 +39,12 @@ export class SparxAdapter extends BaseAdapter {
   async executeTask(taskPayload, context) {
     console.log("Sparx executing:", taskPayload);
 
-    // Temporary test - opens Google to verify Playwright works
-    await this.browserManager.goto("https://www.google.com");
-
     await context.reportProgress(
       10,
       "Browser initialized"
     );
 
-    return {
-      success: true,
-      task: taskPayload
-    };
+    return await this.taskRunner.execute(taskPayload);
   }
 
   async shutdown() {
