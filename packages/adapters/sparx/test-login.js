@@ -7,17 +7,15 @@ const sparx = new SparxAdapter();
 
 registry.register(sparx);
 
-// IMPORTANT: initialize the adapter first
 await sparx.initialize();
-
-console.log("Registered:", sparx.metadata);
 
 const result = await registry.execute(
   "sparx",
   {
-    action: "login-inspect",
-    school: "Beal High School"
-  },
+ action: "login",
+ school: "Beal High School",
+ method: "microsoft"
+},
   {
     reportProgress: async (p, msg) => {
       console.log(`${p}% - ${msg}`);
@@ -27,5 +25,4 @@ const result = await registry.execute(
 
 console.log(result);
 
-// Clean shutdown
 await sparx.shutdown();

@@ -11,3 +11,7 @@ apikeys_exhausted.txt
 crash.log
 tools/__pycache__
 *.log
+.git/
+ms-playwright/
+playwright-report/
+test-results/
