@@ -12,6 +12,7 @@ import { Seneca } from './platforms/seneca/index.js';
 import { LanguageNut } from './platforms/languagenut/index.js';
 import { handleError } from './utils/errorHandler.js';
 import HomeworkTracker from './session/homeworkTracker.js';
+import { AdapterRegistry } from '../packages/mango-engine/index.js';
 import PremiumManager from './session/premiumManager.js';
 import ScheduleManager from './session/scheduleManager.js';
 import QueueSystem from './queue/queueSystem.js';
@@ -34,6 +35,7 @@ class UltimateAutoCompleter {
     this.supportManager = null;
     this.commandHandler = null;
     this.platforms = new Map();
+    this.engine = null;
     this.isRunning = false;
   }
 
@@ -88,9 +90,7 @@ console.log("All managers created");
 this.commandHandler = new CommandHandler(this);
 
 console.log("COMMAND HANDLER CREATED");
-      this.bot.setCommandHandler(this.commandHandler);
-      this.bot.setApp(this);
-
+      this.engine = new AdapterRegistry();
       logger.info('✅ All components initialized successfully');
       return true;
     } catch (error) {

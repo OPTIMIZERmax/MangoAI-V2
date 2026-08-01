@@ -27,6 +27,7 @@ import {
 
 import logger from '../utils/logger.js';
 import config from '../utils/config.js';
+import { dispatchSparxLogin } from './sparxLoginBridge.js';
 
 import path from 'path';
 import fs from 'fs';
@@ -209,16 +210,39 @@ export class DiscordBot {
     const login = interaction.fields.getTextInputValue("login");
     const password = interaction.fields.getTextInputValue("password");
 
-    await interaction.reply({
-      content:
-`✅ Login details saved successfully!
+    try {
+      const payload = {
+        school,
+        method: 'password',
+        username: login,
+        password
+      };
+
+      if (this.app?.engine) {
+        await dispatchSparxLogin(this.app.engine, payload);
+      } else if (this.app?.bot?.app?.engine) {
+        await dispatchSparxLogin(this.app.bot.app.engine, payload);
+      } else {
+        logger.warn({ platform }, 'No engine dispatcher available for Sparx login bridge');
+      }
+
+      await interaction.reply({
+        content:
+`✅ Login request submitted successfully!
 
 **Platform:** ${platform}
 **School:** ${school}
 **Username:** ${login}
 **Password:** Received securely ✅`,
-      flags: MessageFlags.Ephemeral
-    });
+        flags: MessageFlags.Ephemeral
+      });
+    } catch (error) {
+      logger.error({ error: error.message, platform }, 'Failed to dispatch Sparx login');
+      await interaction.reply({
+        content: `❌ Failed to submit Sparx login request: ${error.message}`,
+        flags: MessageFlags.Ephemeral
+      });
+    }
   }
 
   async handleCookieModalSubmit(interaction) {
