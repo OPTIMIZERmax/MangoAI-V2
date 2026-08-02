@@ -6,6 +6,10 @@ export function buildSparxLoginPayload(input = {}) {
     method: input.method === 'microsoft' ? 'microsoft' : 'password'
   };
 
+  if (input.platform) {
+    payload.platform = input.platform;
+  }
+
   if (payload.method === 'password') {
     if (input.username?.trim()) {
       payload.username = input.username.trim();

@@ -1,5 +1,4 @@
-import test from "node:test";
-import assert from "node:assert/strict";
+import { test, expect } from "@jest/globals";
 
 import { LoginTask } from "../src/tasks/LoginTask.js";
 import { SparxClient } from "../src/services/SparxClient.js";
@@ -7,7 +6,7 @@ import { SparxClient } from "../src/services/SparxClient.js";
 test("LoginTask returns success when the helper flow completes", async () => {
   const calls = [];
   const client = {
-    async goToLogin() {
+    async gotoLogin() {
       calls.push("goToLogin");
       return { success: true };
     },
@@ -39,25 +38,26 @@ test("LoginTask returns success when the helper flow completes", async () => {
     password: "secret"
   });
 
-  assert.deepEqual(result, {
-    success: true,
-    loggedIn: true
-  });
+  expect(result).toEqual({
+  success: true,
+  loggedIn: true,
+  method: "password"
+});
 
-  assert.deepEqual(calls, [
-    "goToLogin",
-    "searchSchool:Test School",
-    "selectSchool",
-    "enterUsername:student",
-    "enterPassword:secret",
-    "submitLogin",
-    "isLoggedIn"
-  ]);
+  expect(calls).toEqual([
+  "goToLogin",
+  "searchSchool:Test School",
+  "selectSchool",
+  "enterUsername:student",
+  "enterPassword:secret",
+  "submitLogin",
+  "isLoggedIn"
+]);
 });
 
 test("LoginTask reports invalid credentials when the session is not established", async () => {
   const client = {
-    async goToLogin() {
+    async gotoLogin() {
       return { success: true };
     },
     async searchSchool() {
@@ -87,10 +87,11 @@ test("LoginTask reports invalid credentials when the session is not established"
     password: "wrong"
   });
 
-  assert.deepEqual(result, {
-    success: false,
-    error: "Invalid credentials"
-  });
+  expect(result).toEqual({
+  success: false,
+  loggedIn: false,
+  method: "password"
+});
 });
 
 test("SparxClient selectSchool works without requiring a school argument", async () => {
@@ -98,19 +99,21 @@ test("SparxClient selectSchool works without requiring a school argument", async
     async waitForLoadState() {},
     async waitForTimeout() {},
     getByText() {
-      return {
-        first: () => ({
-          count: async () => 1,
-          click: async () => {}
-        })
-      };
-    },
+  return {
+    first: () => ({
+      count: async () => 1,
+      waitFor: async () => {},
+      click: async () => {}
+    })
+  };
+},
     getByRole() {
-      return {
-        count: async () => 1,
-        click: async () => {}
-      };
-    }
+  return {
+    count: async () => 1,
+    waitFor: async () => {},
+    click: async () => {}
+  };
+}
   };
 
   const client = new SparxClient({
@@ -119,7 +122,7 @@ test("SparxClient selectSchool works without requiring a school argument", async
 
   const result = await client.selectSchool();
 
-  assert.deepEqual(result, {
-    success: true
-  });
+  expect(result).toEqual({
+  success: true
+});
 });

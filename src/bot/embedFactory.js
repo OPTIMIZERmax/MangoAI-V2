@@ -14,26 +14,6 @@ import {
 } from 'discord.js';
 
 export class EmbedFactory {
-  static buildLearningPlatformEmbed() {
-    return new EmbedBuilder()
-      .setColor('#fffb00')
-      .setTitle('MangoAI Learning Platform')
-      .setDescription(
-        '**[FAQ ↗](https://discord.com)**\n\n' +
-        ' Your gateway to personalised AI\n' +
-        ' tutoring assistance.\n' +
-        ' Our verified tutors are available to\n' +
-        ' help you across multiple fields of\n' +
-        ' study.\n\n' +
-        'Press the `Join Queue` button below to connect with a qualified tutor.\n\n' +
-        '__**Notes**__\n' +
-        '> • Get personalised help for all your questions\n' +
-        '> • Connect with experienced tutors in real-time\n' +
-        '> • Solves the top 5% most difficult problems\n' +
-        '> • Secure and confidential tutoring sessions'
-      )
-      .setThumbnail('attachment://standard.gif');
-  }
 
   static buildProgressBar(progress, length = 20) {
     const filled = Math.round((progress / 100) * length);
@@ -315,6 +295,32 @@ export class ContainerFactory {
     return container;
   }
 
+  static buildScheduleContainer() {
+  return new ContainerBuilder()
+    .setAccentColor(0x5865F2)
+    .addTextDisplayComponents(
+      new TextDisplayBuilder().setContent(
+        "# 🗓️ MangoAI Auto Schedule\n\n" +
+        "> Create automatic homework reminders.\n" +
+        "> Keep your homework running automatically.\n\n" +
+        "Use the button below to manage your schedules."
+      )
+    )
+    .addActionRowComponents(
+      new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId("schedule_create")
+          .setLabel("Create Schedule")
+          .setStyle(ButtonStyle.Primary),
+
+        new ButtonBuilder()
+          .setCustomId("schedule_manage")
+          .setLabel("Manage Schedules")
+          .setStyle(ButtonStyle.Secondary)
+      )
+    );
+}
+
   static buildLearningPlatformActionRows() {
     const selectMenuRow = new ActionRowBuilder().addComponents(
       new StringSelectMenuBuilder()
@@ -373,53 +379,6 @@ export const platformLoginData = {
 };
 
 export class ActionRowFactory {
-  static buildLearningPlatformButtons() {
-    const row1 = new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId('platform_join_queue')
-        .setLabel('Join Queue')
-        .setEmoji('<:GET_OUT:1531029730541830175>')
-        .setStyle(ButtonStyle.Danger),
-      new ButtonBuilder()
-        .setCustomId('platform_saved_accounts')
-        .setLabel('With Saved Accounts')
-        .setEmoji('<:Save_thisI_hack_you:1531034046451421286>')
-        .setStyle(ButtonStyle.Success)
-    );
-
-    const row2 = new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId('platform_check_queue')
-        .setLabel('⏳ Check Queue')
-        .setStyle(ButtonStyle.Danger),
-      new ButtonBuilder()
-        .setCustomId('platform_tutorials')
-        .setLabel('Tutorials')
-        .setEmoji('<:bulb:1531035673623007373>')
-        .setStyle(ButtonStyle.Success),
-      new ButtonBuilder()
-        .setCustomId('platform_view_slots')
-        .setLabel('💰 View Slots')
-        .setStyle(ButtonStyle.Success)
-    );
-
-    const row3 = new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId('platform_history')
-        .setLabel('⌛History')
-        .setStyle(ButtonStyle.Success),
-      new ButtonBuilder()
-        .setCustomId('platform_settings')
-        .setLabel('⚙️ Settings')
-        .setStyle(ButtonStyle.Danger),
-      new ButtonBuilder()
-        .setCustomId('platform_feedback')
-        .setLabel('💬 Feedback')
-        .setStyle(ButtonStyle.Success)
-    );
-
-    return [row1, row2, row3];
-  }
 
   static buildAutoScheduleButtons() {
     return new ActionRowBuilder().addComponents(
@@ -541,9 +500,68 @@ export class ActionRowFactory {
   }
 }
 
+export class ScheduleEmbedFactory {
+  static buildScheduleEmbed() {
+    return new EmbedBuilder()
+      .setColor('#5865F2')
+      .setTitle('🥭 MangoAI • Auto Schedule')
+      .setDescription(
+        'Create automatic homework reminders and manage your learning routine.'
+      )
+      .addFields(
+        {
+          name: '⏰ Features',
+          value:
+            '• Automated reminders\n' +
+            '• Platform scheduling\n' +
+            '• Homework planning'
+        },
+        {
+          name: 'Getting Started',
+          value:
+            'Press the button below to create your first schedule.'
+        }
+      )
+      .setFooter({
+        text: '🥭 MangoAI • Smart Scheduling'
+      })
+      .setTimestamp();
+  }
+}
+
+
+export class SupportEmbedFactory {
+  static buildSupportEmbed() {
+    return new EmbedBuilder()
+      .setColor('#ED4245')
+      .setTitle('🥭 MangoAI • Support Center')
+      .setDescription(
+        'Need help? Create a support ticket and our team will assist you.'
+      )
+      .addFields(
+        {
+          name: '🎫 Tickets',
+          value:
+            'Create a private support ticket with the button below.'
+        },
+        {
+          name: '📚 Help',
+          value:
+            'Use `!help` for available commands.'
+        }
+      )
+      .setFooter({
+        text: '🥭 MangoAI Support'
+      })
+      .setTimestamp();
+  }
+}
+
 export default {
   EmbedFactory,
   ActionRowFactory,
   ContainerFactory,
+  ScheduleEmbedFactory,
+  SupportEmbedFactory,
   platformLoginData
 };

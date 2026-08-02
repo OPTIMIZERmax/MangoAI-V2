@@ -7,6 +7,7 @@ import {
   EmbedBuilder,
   ActivityType,
   AttachmentBuilder,
+  MessageFlags,
   ModalBuilder,
   TextInputBuilder,
   TextInputStyle,
@@ -14,14 +15,11 @@ import {
   StringSelectMenuBuilder,
   ButtonBuilder,
   ButtonStyle,
-  MessageFlags,
   ChannelType,
   PermissionFlagsBits
 } from 'discord.js';
 
 import {
-  EmbedFactory,
-  ActionRowFactory,
   ContainerFactory
 } from './embedFactory.js';
 
@@ -52,6 +50,7 @@ export class DiscordBot {
     this.commandHandler = null;
     this.activeSessions = new Map();
     this.app = null;
+    this.platformService = null;
     this.scheduleLoop = null;
     this.presenceInterval = null;
     this.pendingLogins = new Map();
@@ -65,6 +64,10 @@ export class DiscordBot {
 
   setApp(app) {
     this.app = app;
+  }
+
+  setPlatformService(platformService) {
+    this.platformService = platformService;
   }
 
   setupEventHandlers() {
@@ -123,64 +126,6 @@ export class DiscordBot {
       }
     });
 
-    this.client.on('interactionCreate', async (interaction) => {
-      try {
-        // BUTTONS
-        if (interaction.isButton()) {
-          if (interaction.customId.startsWith("login_")) {
-            const platform = interaction.customId.replace("login_", "");
-            return this.openLoginModal(interaction, platform);
-          }
-
-          if (interaction.customId.startsWith("cookies_")) {
-            const platform = interaction.customId.replace("cookies_", "");
-            return this.openCookieModal(interaction, platform);
-          }
-
-          if (interaction.customId.startsWith("saved_")) {
-            const platform = interaction.customId.replace("saved_", "");
-            return this.handleSavedAccounts(interaction, platform);
-          }
-
-          return this.handleButtonInteraction(interaction);
-        }
-
-        // MODALS
-        if (interaction.isModalSubmit()) {
-          if (interaction.customId.startsWith("cookie_login_")) {
-            return this.handleCookieModalSubmit(interaction);
-          }
-          return this.handleLoginModal(interaction);
-        }
-
-        // SELECT MENUS
-        if (interaction.isStringSelectMenu()) {
-          if (interaction.customId === "platform_select" || interaction.customId.startsWith("platform_")) {
-            return this.handleSelectMenuInteraction(interaction);
-          }
-
-          return this.handleLoginTypeSelect(interaction);
-        }
-      } catch (error) {
-        logger.error(
-          { error: error.message, customId: interaction.customId },
-          'Interaction error'
-        );
-
-        if (interaction.replied || interaction.deferred) {
-          await interaction.followUp({
-            content: '❌ Something went wrong.',
-            flags: MessageFlags.Ephemeral
-          }).catch(() => {});
-        } else {
-          await interaction.reply({
-            content: '❌ Button error',
-            flags: MessageFlags.Ephemeral
-          });
-        }
-      }
-    });
-
     this.client.on('error', (error) => {
       logger.error({ error: error.message }, 'Discord client error');
     });
@@ -204,6 +149,82 @@ export class DiscordBot {
     await message.channel.send({ embeds: [embed] });
   }
 
+  async openLoginTypeMenu(interaction, platform) {
+    const row = new ActionRowBuilder()
+      .addComponents(
+        new StringSelectMenuBuilder()
+          .setCustomId(`login_type_${platform}`)
+          .setPlaceholder('Choose login method')
+          .addOptions([
+            {
+              label: 'Username + Password',
+              value: 'password',
+              emoji: '🔑'
+            },
+            {
+              label: 'Microsoft Login',
+              value: 'microsoft',
+              emoji: '🟦'
+            },
+            {
+              label: 'Login with Cookies',
+              value: 'cookies',
+              emoji: '🍪'
+            },
+            {
+              label: 'Saved Account',
+              value: 'saved',
+              emoji: '💾'
+            }
+          ])
+      );
+
+    await interaction.reply({
+      content: `Choose login method for **${platform}**`,
+      components: [row],
+      flags: MessageFlags.Ephemeral
+    });
+  }
+
+  async handleLoginTypeSelect(interaction) {
+    const [, , platform] = interaction.customId.split('_');
+    const choice = interaction.values[0];
+
+    if (choice === 'microsoft') {
+      const payload = {
+        adapter: 'sparx',
+        action: 'login',
+        platform,
+        method: 'microsoft',
+        school: ''
+      };
+
+      await this.dispatchPlatformLogin(platform, payload);
+
+      return interaction.update({
+        content: '🟦 Microsoft login opened',
+        components: []
+      });
+    }
+
+    if (choice === 'password') {
+      return this.openLoginModal(interaction, platform);
+    }
+
+    if (choice === 'cookies') {
+      return this.openCookieModal(interaction, platform);
+    }
+
+    if (choice === 'saved') {
+      return this.handleSavedAccounts(interaction, platform);
+    }
+
+    return interaction.update({
+      content: '❌ Unsupported login method.',
+      components: []
+    });
+  }
+
   async handleLoginModal(interaction) {
     const platform = interaction.customId.replace("school_login_", "");
     const school = interaction.fields.getTextInputValue("school");
@@ -212,19 +233,16 @@ export class DiscordBot {
 
     try {
       const payload = {
+        adapter: 'sparx',
+        action: 'login',
+        platform,
         school,
         method: 'password',
         username: login,
         password
       };
 
-      if (this.app?.engine) {
-        await dispatchSparxLogin(this.app.engine, payload);
-      } else if (this.app?.bot?.app?.engine) {
-        await dispatchSparxLogin(this.app.bot.app.engine, payload);
-      } else {
-        logger.warn({ platform }, 'No engine dispatcher available for Sparx login bridge');
-      }
+      await this.dispatchPlatformLogin(platform, payload);
 
       await interaction.reply({
         content:
@@ -259,23 +277,6 @@ export class DiscordBot {
     await interaction.reply({
       content: `💾 Fetching saved accounts for **${platform}**... Select an account from your saved `.concat(`.env profile.`),
       flags: MessageFlags.Ephemeral
-    });
-  }
-
-  async handleLoginTypeSelect(interaction) {
-    const [type, platform, login] = interaction.customId.split("_");
-    const choice = interaction.values[0];
-
-    await interaction.update({
-      content:
-`🔑 Login method selected:
-
-**Platform:** ${platform}
-**Account:** ${login}
-**Method:** ${choice}
-
-Processing login request...`,
-      components: []
     });
   }
 
@@ -423,64 +424,72 @@ Processing login request...`,
   }
 
   async acknowledgeInteraction(interaction, isV2Override = null) {
-    try {
-      if (!interaction.deferred && !interaction.replied) {
-        const isV2 = isV2Override !== null 
-          ? isV2Override 
-          : (
-              interaction.customId === 'platform_join_queue' ||
-              interaction.customId === 'join_queue' ||
-              interaction.values?.includes('join_queue') ||
-              interaction.values?.includes('platform_join_queue')
-            );
+  try {
+    if (!interaction.deferred && !interaction.replied) {
 
-        const flags = isV2 
-          ? (MessageFlags.Ephemeral | MessageFlags.IsComponentsV2)
-          : MessageFlags.Ephemeral;
+      const isV2 = isV2Override !== null
+        ? isV2Override
+        : (
+            interaction.customId === 'platform_join_queue' ||
+            interaction.customId === 'join_queue'
+          );
 
-        await interaction.deferReply({ flags });
-      }
-    } catch (error) {
-      logger.error({ error: error.message }, 'Failed to acknowledge interaction');
+      const flags = isV2
+        ? MessageFlags.IsComponentsV2
+        : MessageFlags.Ephemeral;
+
+      await interaction.deferReply({ flags });
     }
+  } catch (error) {
+    logger.error(
+      { error: error.message },
+      'Failed to acknowledge interaction'
+    );
   }
+}
 
   async handleButtonInteraction(interaction) {
-    const parts = interaction.customId.split('_');
-    const group = parts.shift();
-    const action = parts.join('_');
 
-    const isV2 = (group === 'platform' && action === 'join_queue');
-    await this.acknowledgeInteraction(interaction, isV2);
+  const parts = interaction.customId.split('_');
+  const group = parts.shift();
+  const action = parts.join('_');
 
-    if (group === 'homework') {
-      return this.handleHomeworkButton(interaction, action);
-    }
+  const isV2 = (group === 'platform' && action === 'join_queue');
 
-    if (group === 'pastpapers') {
-      return this.handlePastPapersButton(interaction, action);
-    }
-
-    if (group === 'platform') {
-      return this.handlePlatformButton(interaction, action);
-    }
-
-    if (group === 'schedule') {
-      return this.handleScheduleButton(interaction, action);
-    }
-
-    if (group === 'support') {
-      return this.handleSupportButton(interaction, action);
-    }
-
-    if (group === 'ticket') {
-      return this.handleTicketButton(interaction, action);
-    }
-
-    return this.respondToInteraction(interaction, {
-      content: 'Button action not supported yet.'
-    });
+  // Do not defer Components V2 replies
+  if (!isV2) {
+    await this.acknowledgeInteraction(interaction);
   }
+
+
+  if (group === 'homework') {
+    return this.handleHomeworkButton(interaction, action);
+  }
+
+  if (group === 'pastpapers') {
+    return this.handlePastPapersButton(interaction, action);
+  }
+
+  if (group === 'platform') {
+    return this.handlePlatformButton(interaction, action);
+  }
+
+  if (group === 'schedule') {
+    return this.handleScheduleButton(interaction, action);
+  }
+
+  if (group === 'support') {
+    return this.handleSupportButton(interaction, action);
+  }
+
+  if (group === 'ticket') {
+    return this.handleTicketButton(interaction, action);
+  }
+
+  return this.respondToInteraction(interaction, {
+    content: 'Button action not supported yet.'
+  });
+}
 
   async handleHomeworkButton(interaction, action) {
     const embed = new EmbedBuilder()
@@ -586,7 +595,8 @@ Processing login request...`,
     const { customId, values } = interaction;
     const selectedValue = values?.[0];
 
-    const isV2 = (selectedValue === 'join_queue');
+    const isV2 =
+  customId === 'platform_select';
     await this.acknowledgeInteraction(interaction, isV2);
 
     if (customId === 'platform_select') {
@@ -627,10 +637,12 @@ Processing login request...`,
         const container = ContainerFactory.buildLearningPlatformContainer(hasGif);
 
         return this.respondToInteraction(interaction, {
-          components: [container],
-          files,
-          flags: MessageFlags.IsComponentsV2
-        });
+  components: [
+    container
+  ],
+  files,
+  flags: MessageFlags.IsComponentsV2
+});
       }
 
       case "join_sparxMaths":
@@ -647,16 +659,7 @@ Processing login request...`,
           });
         }
 
-        const platformMap = {
-          sparxMaths: { name: "Sparx Maths", key: "sparxMaths", emoji: "<:SparxMaths:1515672129188790302>" },
-          sparxReader: { name: "Sparx Reader", key: "sparxReader", emoji: "<:SparxReader:1515672202375204945>" },
-          sparxScience: { name: "Sparx Science", key: "sparxScience", emoji: "<:SparxScience:1515672274051797072>" },
-          languagenut: { name: "LanguageNut", key: "languagenut", emoji: "<:LanguageNut:1515672374878670858>" },
-          bedrock: { name: "Bedrock", key: "bedrock", emoji: "<:Bedrock:1529265581273124935>" },
-          seneca: { name: "Seneca", key: "seneca", emoji: "<:Seneca:1515672492512120963>" }
-        };
-
-        const platform = platformMap[selectedPlatform];
+        const platform = this.getPlatformDefinition(selectedPlatform);
 
         if (!platform) {
           return this.respondToInteraction(interaction, {
@@ -676,7 +679,7 @@ Processing login request...`,
 
         const embed = new EmbedBuilder()
           .setColor("#F4A300")
-          .setTitle(`${platform.emoji} ${platform.name} Login`)
+          .setTitle(`${platform.emoji ? `${platform.emoji} ` : ''}${platform.name} Login`)
           .setDescription(
             "**Login by simply inputting your username and password, logging in with cookies, or choosing one of your saved accounts.**"
           )
@@ -752,36 +755,79 @@ Processing login request...`,
     }
   }
 
-  async respondToInteraction(interaction, payload) {
-    try {
-      if (interaction.deferred || interaction.replied) {
-        const { flags, ...editPayload } = payload;
-        return await interaction.editReply(editPayload);
-      }
+  getPlatformDefinition(platformKey) {
+    const normalizedKey = String(platformKey || '').trim();
+    if (!normalizedKey) return null;
 
-      let flags = MessageFlags.Ephemeral;
-      if (payload.flags !== undefined) {
-        flags = payload.flags;
-      }
-
-      return await interaction.reply({
-        ...payload,
-        flags
-      });
-    } catch (error) {
-      logger.error(
-        { error: error.message, customId: interaction.customId },
-        'Failed to respond to interaction'
-      );
-
-      if (interaction.deferred || interaction.replied) {
-        return await interaction.followUp({
-          content: '❌ Error processing action.',
-          flags: MessageFlags.Ephemeral
-        }).catch(() => {});
+    if (this.platformService?.getPlatform) {
+      const servicePlatform = this.platformService.getPlatform(normalizedKey);
+      if (servicePlatform) {
+        return servicePlatform;
       }
     }
+
+    const fallbackMap = {
+      sparxMaths: { name: 'Sparx Maths', key: 'sparxMaths', emoji: '<:SparxMaths:1515672129188790302>' },
+      sparxReader: { name: 'Sparx Reader', key: 'sparxReader', emoji: '<:SparxReader:1515672202375204945>' },
+      sparxScience: { name: 'Sparx Science', key: 'sparxScience', emoji: '<:SparxScience:1515672274051797072>' },
+      languagenut: { name: 'LanguageNut', key: 'languagenut', emoji: '<:LanguageNut:1515672374878670858>' },
+      bedrock: { name: 'Bedrock', key: 'bedrock', emoji: '<:Bedrock:1529265581273124935>' },
+      seneca: { name: 'Seneca', key: 'seneca', emoji: '<:Seneca:1515672492512120963>' }
+    };
+
+    return fallbackMap[normalizedKey] || null;
   }
+
+  async dispatchPlatformLogin(platform, payload) {
+    const normalizedPlatform = String(platform || '').trim();
+    const basePayload = {
+      adapter: 'sparx',
+      action: 'login',
+      platform: normalizedPlatform,
+      ...payload
+    };
+
+    if (this.platformService?.login) {
+      logger.info({ platform: normalizedPlatform }, 'Dispatching login through PlatformService');
+      return this.platformService.login(normalizedPlatform, basePayload, { source: 'discordBot' });
+    }
+
+    if (this.app?.engine) {
+      logger.info({ platform: normalizedPlatform }, 'Falling back to sparxLoginBridge dispatch');
+      return dispatchSparxLogin(this.app.engine, basePayload);
+    }
+
+    logger.warn({ platform: normalizedPlatform }, 'No platform service or engine available for login dispatch');
+    return null;
+  }
+
+  async respondToInteraction(interaction, payload) {
+  try {
+
+    if (interaction.deferred || interaction.replied) {
+      return await interaction.editReply(payload);
+    }
+
+    return await interaction.reply(payload);
+
+  } catch (error) {
+
+    logger.error(
+      { 
+        error: error.message,
+        customId: interaction.customId
+      },
+      'Failed to respond to interaction'
+    );
+
+    if (interaction.deferred || interaction.replied) {
+      return interaction.followUp({
+        content: '❌ Error processing action.',
+        flags: MessageFlags.Ephemeral
+      }).catch(() => {});
+    }
+  }
+}
 
   async startScheduleLoop() {
     if (this.scheduleLoop) return;
@@ -970,97 +1016,80 @@ Processing login request...`,
   }
 
   async sendStartupMessages() {
-    try {
-      const channels = config.discord.channels;
+  try {
+    const channels = config.discord.channels;
 
-      logger.info('🗑️ Clearing all channels before refresh...');
+    logger.info('🗑️ Clearing all channels before refresh...');
 
-      if (channels.learningPlatform) await this.clearChannelMessages('learningPlatform');
-      if (channels.autoSchedule) await this.clearChannelMessages('autoSchedule');
-      if (channels.supportTickets) await this.clearChannelMessages('supportTickets');
-
-      // LEARNING PLATFORM CHANNEL
-      if (channels.learningPlatform) {
-        const gifPath = path.join(__dirname, '../../standard.gif');
-        const hasGif = fs.existsSync(gifPath);
-
-        // Build embed using your static method
-        const platformEmbed = EmbedFactory.buildLearningPlatformEmbed();
-
-        // Row 1: Join Queue (Blue), Saved Accounts (Grey), Group Queue (Grey)
-        const row1 = new ActionRowBuilder().addComponents(
-          new ButtonBuilder().setCustomId('platform_join_queue').setLabel('Join Queue').setStyle(ButtonStyle.Primary),
-          new ButtonBuilder().setCustomId('platform_saved_accounts').setLabel('Saved Accounts').setStyle(ButtonStyle.Secondary),
-          new ButtonBuilder().setCustomId('platform_group_queue').setLabel('Group Queue').setStyle(ButtonStyle.Secondary)
-        );
-
-        // Row 2: Check Queue (Grey), Tutorials (Grey), View Slots (Grey)
-        const row2 = new ActionRowBuilder().addComponents(
-          new ButtonBuilder().setCustomId('platform_check_queue').setLabel('Check Queue').setStyle(ButtonStyle.Secondary),
-          new ButtonBuilder().setCustomId('platform_tutorials').setLabel('Tutorials').setStyle(ButtonStyle.Secondary),
-          new ButtonBuilder().setCustomId('platform_view_slots').setLabel('View Slots').setStyle(ButtonStyle.Secondary)
-        );
-
-        // Row 3: History (Grey), Settings (Blue), Feedback (Grey)
-        const row3 = new ActionRowBuilder().addComponents(
-          new ButtonBuilder().setCustomId('platform_history').setLabel('History').setStyle(ButtonStyle.Secondary),
-          new ButtonBuilder().setCustomId('platform_settings').setLabel('Settings').setStyle(ButtonStyle.Primary),
-          new ButtonBuilder().setCustomId('platform_feedback').setLabel('Feedback').setStyle(ButtonStyle.Secondary)
-        );
-
-        const payload = {
-          embeds: [platformEmbed],
-          components: [row1, row2, row3]
-        };
-
-        if (hasGif) {
-          payload.files = [new AttachmentBuilder(gifPath, { name: 'standard.gif' })];
-        }
-
-        await this.sendToConfiguredChannel('learningPlatform', payload)
-          .catch(err => logger.warn({ channel: 'learningPlatform', error: err.message }, 'Failed to send startup message'));
-      }
-
-      logger.info('✅ All channels refreshed and ready!');
-    } catch (error) {
-      logger.error({ error: error.message }, 'Error sending startup messages');
+    // Clear channels
+    if (channels.learningPlatform) {
+      await this.clearChannelMessages('learningPlatform');
     }
-  }
 
-  async openLoginModal(interaction, platform) {
-    const modal = new ModalBuilder()
-      .setCustomId(`school_login_${platform}`)
-      .setTitle("Login with your school credentials");
+    if (channels.autoSchedule) {
+      await this.clearChannelMessages('autoSchedule');
+    }
 
-    const school = new TextInputBuilder()
-      .setCustomId("school")
-      .setLabel("School")
-      .setStyle(TextInputStyle.Short)
-      .setPlaceholder("Your school name")
-      .setRequired(true);
+    if (channels.supportTickets) {
+      await this.clearChannelMessages('supportTickets');
+    }
 
-    const login = new TextInputBuilder()
-      .setCustomId("login")
-      .setLabel("Username / Email")
-      .setStyle(TextInputStyle.Short)
-      .setPlaceholder("Email / Username")
-      .setRequired(true);
 
-    const password = new TextInputBuilder()
-      .setCustomId("password")
-      .setLabel("Password")
-      .setStyle(TextInputStyle.Short)
-      .setPlaceholder("Password")
-      .setRequired(true);
+    /*
+    ==================================
+    LEARNING PLATFORM CHANNEL
+    ==================================
+    */
 
-    modal.addComponents(
-      new ActionRowBuilder().addComponents(school),
-      new ActionRowBuilder().addComponents(login),
-      new ActionRowBuilder().addComponents(password)
+    if (channels.learningPlatform) {
+
+      const gifPath = path.join(__dirname, '../../standard.gif');
+      const hasGif = fs.existsSync(gifPath);
+      
+      const container =
+  ContainerFactory.buildLearningPlatformContainer(hasGif);
+
+const payload = {
+  components: [container],
+  flags: MessageFlags.IsComponentsV2
+};
+
+if (hasGif) {
+  payload.files = [
+    new AttachmentBuilder(gifPath, {
+      name: 'standard.gif'
+    })
+  ];
+}
+
+      await this.sendToConfiguredChannel(
+        'learningPlatform',
+        payload
+      ).catch(err =>
+        logger.warn(
+          {
+            channel: 'learningPlatform',
+            error: err.message
+          },
+          'Failed to send learning platform message'
+        )
+      );
+    }
+
+    logger.info('✅ All channels refreshed and ready!');
+
+
+  } catch (error) {
+
+    logger.error(
+      {
+        error: error.message
+      },
+      'Error sending startup messages'
     );
 
-    await interaction.showModal(modal);
   }
+}
 
   async openCookieModal(interaction, platform) {
     const modal = new ModalBuilder()

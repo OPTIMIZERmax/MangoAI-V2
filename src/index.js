@@ -18,6 +18,7 @@ import ScheduleManager from './session/scheduleManager.js';
 import QueueSystem from './queue/queueSystem.js';
 import SupportManager from './session/supportManager.js';
 import CommandHandler from './bot/commandHandler.js';
+import PlatformService from './services/PlatformService.js';
 
 /**
  * Main Application Class
@@ -36,6 +37,7 @@ class UltimateAutoCompleter {
     this.commandHandler = null;
     this.platforms = new Map();
     this.engine = null;
+    this.platformService = null;
     this.isRunning = false;
   }
 
@@ -82,15 +84,20 @@ console.log("All managers created");
       this.initializePlatforms();
       console.log("PLATFORMS OK");
 
+      // Initialize engine-backed platform service
+      this.engine = new AdapterRegistry();
+      this.platformService = new PlatformService(this);
+
       // Initialize Discord bot
       this.bot = new DiscordBot();
+      this.bot.setApp(this);
+      this.bot.setPlatformService(this.platformService);
       console.log("DISCORDBOT OK");
       console.log("CREATING COMMAND HANDLER");
 
 this.commandHandler = new CommandHandler(this);
 
 console.log("COMMAND HANDLER CREATED");
-      this.engine = new AdapterRegistry();
       logger.info('✅ All components initialized successfully');
       return true;
     } catch (error) {
