@@ -3,7 +3,6 @@
 import {
   Client,
   GatewayIntentBits,
-  Partials,
   EmbedBuilder,
   ActivityType,
   AttachmentBuilder,
@@ -17,633 +16,2855 @@ import {
   ButtonStyle,
   ChannelType,
   PermissionFlagsBits
-} from 'discord.js';
+} from "discord.js";
 
 import {
-  ContainerFactory
-} from './embedFactory.js';
+  ContainerFactory,
+  EmbedFactory,
+  ActionRowFactory
+} from "./embedFactory.js";
 
-import logger from '../utils/logger.js';
-import config from '../utils/config.js';
-import { dispatchSparxLogin } from './sparxLoginBridge.js';
+import logger from "../utils/logger.js";
+import config from "../utils/config.js";
 
-import path from 'path';
-import fs from 'fs';
-import { fileURLToPath } from 'url';
+import path from "node:path";
+import fs from "node:fs";
+import { fileURLToPath } from "node:url";
 
-const __dirname = path.dirname(
-  fileURLToPath(import.meta.url)
-);
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+/*
+ * ============================================================
+ * VERIFICATION CONFIGURATION
+ * ============================================================
+ *
+ * Verification panel is always sent to this channel.
+ */
+const VERIFICATION_CHANNEL_ID =
+  "1519734400730796252";
+
+/*
+ * Set this in .env:
+ *
+ * VERIFIED_ROLE_ID=YOUR_VERIFIED_ROLE_ID
+ */
+const VERIFIED_ROLE_ID =
+  process.env.VERIFIED_ROLE_ID ?? null;
 
 export class DiscordBot {
   constructor() {
-    this.client = new Client({
-      intents: [
-        GatewayIntentBits.Guilds,
-        GatewayIntentBits.GuildMessages,
-        GatewayIntentBits.DirectMessages,
-        GatewayIntentBits.MessageContent,
-        GatewayIntentBits.GuildPresences
-      ]
-    });
+  this.client = new Client({
+    intents: [
+      GatewayIntentBits.Guilds,
+      GatewayIntentBits.GuildMessages,
+      GatewayIntentBits.DirectMessages,
+      GatewayIntentBits.MessageContent,
+      GatewayIntentBits.GuildPresences
+    ]
+  });
 
-    this.commandHandler = null;
-    this.activeSessions = new Map();
-    this.app = null;
-    this.platformService = null;
-    this.scheduleLoop = null;
-    this.presenceInterval = null;
-    this.pendingLogins = new Map();
+  // ========================================================
+  // APPLICATION STATE
+  // ========================================================
 
-    this.setupEventHandlers();
-  }
+  this.commandHandler = null;
+  this.app = null;
+  this.platformService = null;
+  this.loginService = null;
 
-  setCommandHandler(handler) {
-    this.commandHandler = handler;
-  }
+  this.activeSessions = new Map();
+  this.pendingLogins = new Map();
 
-  setApp(app) {
-    this.app = app;
-  }
+ // ========================================================
+// VERIFICATION STATE
+// ========================================================
 
-  setPlatformService(platformService) {
-    this.platformService = platformService;
-  }
+/*
+ * userId -> {
+ *   step: 1 | 2 | 3,
+ *   answer: string | null,
+ *   attempts: number,
+ *   createdAt: number,
+ *   expiresAt: number
+ * }
+ */
+this.verificationSessions = new Map();
 
-  setupEventHandlers() {
-    this.client.once('clientReady', () => {
+  // ========================================================
+  // TIMERS
+  // ========================================================
+
+  this.scheduleLoop = null;
+  this.presenceInterval = null;
+
+  this.setupEventHandlers();
+}
+
+// ==========================================================
+// DEPENDENCY INJECTION
+// ==========================================================
+
+setCommandHandler(handler) {
+  this.commandHandler = handler;
+}
+
+setApp(app) {
+  this.app = app;
+}
+
+setPlatformService(platformService) {
+  this.platformService = platformService;
+}
+
+setLoginService(loginService) {
+  this.loginService = loginService;
+}
+
+// ==========================================================
+// EVENT HANDLERS
+// ==========================================================
+
+setupEventHandlers() {
+  this.setupReadyHandler();
+  this.setupInteractionHandler();
+  this.setupMessageHandler();
+  this.setupErrorHandler();
+}
+
+// ==========================================================
+// READY
+// ==========================================================
+
+setupReadyHandler() {
+  this.client.once("clientReady", async () => {
+    try {
+      const username =
+        this.client.user?.username ??
+        "Unknown";
+
       logger.info(
-        { username: this.client.user.username },
-        'Discord bot is ready'
+        { username },
+        "Discord bot is ready"
       );
+
       this.setPresence();
-    });
 
-    this.client.on('messageCreate', async (message) => {
-      if (message.author.bot) return;
-
-      /* ==================================
-         SENAI PLATFORM CHANNELS
-         ================================== */
-      const platformChannels = {
-        "sparx-maths": "sparxMaths",
-        "science-reader": "science",
-        "educake": "educake",
-        "drfrost": "drfrost",
-        "seneca": "seneca",
-        "languagenut": "languagenut"
-      };
-
-      const platform = platformChannels[message.channel.name];
-      if (platform) {
-        return this.handlePlatformQuestion(message, platform);
-      }
-
-      /* ==================================
-         PREFIX COMMANDS
-         ================================== */
-      if (!message.content.startsWith(config.discord.prefix)) return;
-
-      const args = message.content
-        .slice(config.discord.prefix.length)
-        .trim()
-        .split(/ +/);
-
-      const command = args.shift()?.toLowerCase();
-      if (!command) return;
+      // ======================================================
+      // VERIFICATION PANEL
+      // ======================================================
 
       try {
-        await this.handleCommand(command, args, message);
+        await this.sendVerificationPanel();
       } catch (error) {
         logger.error(
-          { error: error.message, command },
-          'Error handling command'
+          {
+            error: error?.message,
+            stack: error?.stack
+          },
+          "Failed to send verification panel"
         );
-
-        await this.replyToChannel(message, {
-          content: `❌ ${error.message}`
-        });
       }
-    });
 
-    this.client.on('error', (error) => {
-      logger.error({ error: error.message }, 'Discord client error');
-    });
-  }
-
-  async handlePlatformQuestion(message, platform) {
-    const question = message.content.trim();
-    if (!question) return;
-
-    const embed = new EmbedBuilder()
-      .setColor('#5865F2')
-      .setTitle('🥭 MangoAI • Question Received')
-      .addFields(
-        { name: 'Platform', value: platform, inline: true },
-        { name: 'Student', value: message.author.username, inline: true },
-        { name: 'Question', value: question }
-      )
-      .setTimestamp()
-      .setFooter({ text: 'MangoAI Learning Platform' });
-
-    await message.channel.send({ embeds: [embed] });
-  }
-
-  async openLoginTypeMenu(interaction, platform) {
-    const row = new ActionRowBuilder()
-      .addComponents(
-        new StringSelectMenuBuilder()
-          .setCustomId(`login_type_${platform}`)
-          .setPlaceholder('Choose login method')
-          .addOptions([
-            {
-              label: 'Username + Password',
-              value: 'password',
-              emoji: '🔑'
-            },
-            {
-              label: 'Microsoft Login',
-              value: 'microsoft',
-              emoji: '🟦'
-            },
-            {
-              label: 'Login with Cookies',
-              value: 'cookies',
-              emoji: '🍪'
-            },
-            {
-              label: 'Saved Account',
-              value: 'saved',
-              emoji: '💾'
-            }
-          ])
-      );
-
-    await interaction.reply({
-      content: `Choose login method for **${platform}**`,
-      components: [row],
-      flags: MessageFlags.Ephemeral
-    });
-  }
-
-  async handleLoginTypeSelect(interaction) {
-    const [, , platform] = interaction.customId.split('_');
-    const choice = interaction.values[0];
-
-    if (choice === 'microsoft') {
-      const payload = {
-        adapter: 'sparx',
-        action: 'login',
-        platform,
-        method: 'microsoft',
-        school: ''
-      };
-
-      await this.dispatchPlatformLogin(platform, payload);
-
-      return interaction.update({
-        content: '🟦 Microsoft login opened',
-        components: []
-      });
-    }
-
-    if (choice === 'password') {
-      return this.openLoginModal(interaction, platform);
-    }
-
-    if (choice === 'cookies') {
-      return this.openCookieModal(interaction, platform);
-    }
-
-    if (choice === 'saved') {
-      return this.handleSavedAccounts(interaction, platform);
-    }
-
-    return interaction.update({
-      content: '❌ Unsupported login method.',
-      components: []
-    });
-  }
-
-  async handleLoginModal(interaction) {
-    const platform = interaction.customId.replace("school_login_", "");
-    const school = interaction.fields.getTextInputValue("school");
-    const login = interaction.fields.getTextInputValue("login");
-    const password = interaction.fields.getTextInputValue("password");
-
-    try {
-      const payload = {
-        adapter: 'sparx',
-        action: 'login',
-        platform,
-        school,
-        method: 'password',
-        username: login,
-        password
-      };
-
-      await this.dispatchPlatformLogin(platform, payload);
-
-      await interaction.reply({
-        content:
-`✅ Login request submitted successfully!
-
-**Platform:** ${platform}
-**School:** ${school}
-**Username:** ${login}
-**Password:** Received securely ✅`,
-        flags: MessageFlags.Ephemeral
-      });
     } catch (error) {
-      logger.error({ error: error.message, platform }, 'Failed to dispatch Sparx login');
-      await interaction.reply({
-        content: `❌ Failed to submit Sparx login request: ${error.message}`,
-        flags: MessageFlags.Ephemeral
-      });
+      logger.error(
+        {
+          error: error?.message,
+          stack: error?.stack
+        },
+        "Discord ready handler failed"
+      );
     }
-  }
+  });
+}
 
-  async handleCookieModalSubmit(interaction) {
-    const platform = interaction.customId.replace("cookie_login_", "");
-    const cookies = interaction.fields.getTextInputValue("cookies_input");
+  // ==========================================================
+  // INTERACTION HANDLER
+  // ==========================================================
 
-    await interaction.reply({
-      content: `🍪 Cookie session stored for **${platform}**. Automated tasks will use this session token.`,
-      flags: MessageFlags.Ephemeral
-    });
-  }
+  setupInteractionHandler() {
+    this.client.on(
+      "interactionCreate",
+      async interaction => {
+        try {
+          // --------------------------------------------------
+          // BUTTONS
+          // --------------------------------------------------
 
-  async handleSavedAccounts(interaction, platform) {
-    await interaction.reply({
-      content: `💾 Fetching saved accounts for **${platform}**... Select an account from your saved `.concat(`.env profile.`),
-      flags: MessageFlags.Ephemeral
-    });
-  }
+          if (
+            interaction.isButton()
+          ) {
+            await this.handleButtonInteraction(
+              interaction
+            );
 
-  async handleCommand(command, args, message) {
-    logger.info({ command, author: message.author.username }, 'Command received');
+            return;
+          }
 
-    if (this.commandHandler && this.commandHandler.commands.has(command)) {
-      return await this.commandHandler.commands.get(command)(message, args);
-    }
+          // --------------------------------------------------
+          // SELECT MENUS
+          // --------------------------------------------------
 
-    switch (command) {
-      case 'help':
-        return this.handleHelp(message);
-      case 'solve':
-        return this.handleSolve(message, args);
-      case 'status':
-        return this.handleStatus(message);
-      case 'ping':
-        return this.replyToChannel(message, `🏓 Pong! ${this.client.ws.ping}ms`);
-      default:
-        return this.replyToChannel(message, '❓ Unknown command. Use `!help`');
-    }
-  }
+          if (
+            interaction.isStringSelectMenu()
+          ) {
+            await this.handleSelectMenuInteraction(
+              interaction
+            );
 
-  async handleHelp(message) {
-    const embed = new EmbedBuilder()
-      .setColor('#0099ff')
-      .setTitle('📚 Auto Completer Commands')
-      .addFields(
-        {
-          name: '**Homework**',
-          value:
-            '`!homework` - View your homework progress\n' +
-            '`!homework create [subject] [name]` - Create new task\n' +
-            '`!tasks` - Alias for homework'
-        },
-        {
-          name: '**Premium**',
-          value:
-            '`!premium` - View premium tiers\n' +
-            '`!trial claim` - Start free trial'
-        },
-        {
-          name: '**Queue**',
-          value:
-            '`!queue` - View queue status\n' +
-            '`!join [platform]` - Join queue'
-        },
-        {
-          name: '**Past Papers**',
-          value:
-            '`!pastpapers` - View the latest past papers\n' +
-            '`!pastpapers <subject>` - Search by subject'
-        },
-        {
-          name: '**Scheduler**',
-          value:
-            '`!schedule` - View your schedules\n' +
-            '`!schedule create [platform] [time] [days...]` - Create schedule'
-        },
-        {
-          name: '**Info**',
-          value:
-            '`!stats` - Bot statistics\n' +
-            '`!help` - This message\n' +
-            '`!ping` - Check latency'
+            return;
+          }
+
+          // --------------------------------------------------
+          // MODALS
+          // --------------------------------------------------
+
+          if (
+            interaction.isModalSubmit()
+          ) {
+            if (
+              interaction.customId.startsWith(
+                "school_login_"
+              )
+            ) {
+              await this.handleLoginModal(
+                interaction
+              );
+
+              return;
+            }
+
+            if (
+              interaction.customId.startsWith(
+                "cookie_login_"
+              )
+            ) {
+              await this.handleCookieModalSubmit(
+                interaction
+              );
+
+              return;
+            }
+
+            if (
+              interaction.customId.startsWith(
+                "verification_captcha_"
+              )
+            ) {
+              await this.handleVerificationCaptcha(
+                interaction
+              );
+
+              return;
+            }
+          }
+        } catch (error) {
+          logger.error(
+            {
+              error:
+                error?.message,
+              stack:
+                error?.stack,
+              customId:
+                interaction?.customId,
+              interactionType:
+                interaction?.type,
+              userId:
+                interaction?.user?.id,
+              username:
+                interaction?.user?.username
+            },
+            "Interaction handler failed"
+          );
+
+          try {
+            if (
+              interaction.deferred ||
+              interaction.replied
+            ) {
+              await interaction
+                .followUp({
+                  content:
+                    "❌ Something went wrong while processing that action.",
+                  flags:
+                    MessageFlags.Ephemeral
+                })
+                .catch(() => {});
+            } else {
+              await interaction
+                .reply({
+                  content:
+                    "❌ Something went wrong while processing that action.",
+                  flags:
+                    MessageFlags.Ephemeral
+                })
+                .catch(() => {});
+            }
+          } catch {
+            // Ignore secondary interaction errors.
+          }
         }
-      )
-      .setTimestamp();
-
-    await this.replyToChannel(message, { embeds: [embed] });
-  }
-
-  async handleSolve(message, args) {
-    if (args.length < 2) {
-      return await this.replyToChannel(message, '❌ Usage: `!solve <platform> <question>`');
-    }
-
-    const platform = args[0].toLowerCase();
-    const question = args.slice(1).join(' ');
-
-    await this.replyToChannel(
-      message,
-      `🔄 Processing your request for ${platform}...\nQuestion: ${question}`
+      }
     );
   }
 
-  async handleStatus(message) {
-    const guildSession = message.guild
-      ? this.activeSessions.get(message.guild.id)
-      : null;
+  // ==========================================================
+  // MESSAGE HANDLER
+  // ==========================================================
 
-    const embed = new EmbedBuilder()
-      .setColor('#00ff00')
-      .setTitle('✅ Bot Status')
-      .addFields(
-        { name: 'Status', value: 'Online' },
-        { name: 'Ping', value: `${this.client.ws.ping}ms` },
-        { name: 'Uptime', value: this.formatUptime(this.client.uptime) },
-        { name: 'Version', value: '2.0.0' },
-        { name: 'Auto Channels', value: guildSession ? 'Enabled' : 'Disabled' }
-      )
-      .setTimestamp();
+  setupMessageHandler() {
+    this.client.on(
+      "messageCreate",
+      async message => {
+        try {
+          if (
+            message.author?.bot
+          ) {
+            return;
+          }
 
-    await this.replyToChannel(message, { embeds: [embed] });
+          if (
+            !message.content?.trim()
+          ) {
+            return;
+          }
+
+          // --------------------------------------------------
+          // PLATFORM QUESTION CHANNELS
+          // --------------------------------------------------
+
+          const platformChannels = {
+            "sparx-maths":
+              "sparxMaths",
+
+            "science-reader":
+              "science",
+
+            educake:
+              "educake",
+
+            drfrost:
+              "drfrost",
+
+            seneca:
+              "seneca",
+
+            languagenut:
+              "languagenut"
+          };
+
+          const platform =
+            platformChannels[
+              message.channel?.name
+            ];
+
+          if (platform) {
+            await this.handlePlatformQuestion(
+              message,
+              platform
+            );
+
+            return;
+          }
+
+          // --------------------------------------------------
+          // PREFIX COMMANDS
+          // --------------------------------------------------
+
+          const prefix =
+            config.discord.prefix;
+
+          if (
+            !prefix ||
+            !message.content.startsWith(
+              prefix
+            )
+          ) {
+            return;
+          }
+
+          const content =
+            message.content
+              .slice(prefix.length)
+              .trim();
+
+          if (!content) {
+            return;
+          }
+
+          const args =
+            content.split(/\s+/);
+
+          const command =
+            args
+              .shift()
+              ?.toLowerCase();
+
+          if (!command) {
+            return;
+          }
+
+          await this.handleCommand(
+            command,
+            args,
+            message
+          );
+        } catch (error) {
+          logger.error(
+            {
+              error:
+                error?.message,
+              stack:
+                error?.stack,
+              messageId:
+                message?.id,
+              channelId:
+                message?.channel?.id,
+              authorId:
+                message?.author?.id
+            },
+            "Message handler failed"
+          );
+
+          try {
+            await this.replyToChannel(
+              message,
+              {
+                content:
+                  `❌ ${error?.message ?? "An unexpected error occurred."}`
+              }
+            );
+          } catch {
+            // Ignore secondary reply failures.
+          }
+        }
+      }
+    );
   }
 
-  async ensureGuildSession(_message) {
+  // ==========================================================
+  // DISCORD CLIENT ERRORS
+  // ==========================================================
+
+  setupErrorHandler() {
+    this.client.on(
+      "error",
+      error => {
+        logger.error(
+          {
+            error:
+              error?.message,
+            name:
+              error?.name,
+            code:
+              error?.code,
+            status:
+              error?.status,
+            stack:
+              error?.stack
+          },
+          "Discord client error"
+        );
+      }
+    );
+  }
+
+  // ==========================================================
+  // PLATFORM QUESTION HANDLER
+  // ==========================================================
+
+  async handlePlatformQuestion(
+    message,
+    platform
+  ) {
+    const question =
+      message.content.trim();
+
+    if (!question) {
+      return;
+    }
+
+    const embed =
+      new EmbedBuilder()
+        .setColor("#5865F2")
+        .setTitle(
+          "🥭 NexusAI • Question Received"
+        )
+        .addFields(
+          {
+            name:
+              "Platform",
+            value:
+              String(platform),
+            inline:
+              true
+          },
+          {
+            name:
+              "Student",
+            value:
+              message.author.username,
+            inline:
+              true
+          },
+          {
+            name:
+              "Question",
+            value:
+              question
+          }
+        )
+        .setTimestamp()
+        .setFooter({
+          text:
+            "NexusAI Learning Platform"
+        });
+
+    await message.channel.send({
+      embeds: [
+        embed
+      ]
+    });
+  }
+
+  // ==========================================================
+  // 3-STEP VERIFICATION SYSTEM
+  // ==========================================================
+  //
+  // STEP 1:
+  // User clicks "Start Verification".
+  //
+  // STEP 2:
+  // User completes a generated captcha through a modal.
+  //
+  // STEP 3:
+  // Bot assigns the Verified role.
+  //
+  // ==========================================================
+
+  async sendVerificationPanel() {
+    const channel =
+      this.client.channels.cache.get(
+        VERIFICATION_CHANNEL_ID
+      ) ??
+      await this.client.channels
+        .fetch(
+          VERIFICATION_CHANNEL_ID
+        )
+        .catch(
+          () => null
+        );
+
+    if (!channel) {
+      logger.warn(
+        {
+          channelId:
+            VERIFICATION_CHANNEL_ID
+        },
+        "Verification channel was not found"
+      );
+
+      return null;
+    }
+
+    if (
+      !channel.isTextBased()
+    ) {
+      logger.warn(
+        {
+          channelId:
+            VERIFICATION_CHANNEL_ID
+        },
+        "Verification channel is not text-based"
+      );
+
+      return null;
+    }
+
+    /*
+     * Remove previous bot verification panels only.
+     *
+     * This avoids deleting messages belonging to users.
+     */
+    try {
+      const messages =
+        await channel.messages.fetch({
+          limit: 100
+        });
+
+      const botMessages =
+        messages.filter(
+          message =>
+            message.author?.id ===
+              this.client.user?.id &&
+            message.embeds?.some(
+              embed =>
+                embed.title ===
+                "🛡️ NexusAI Verification"
+            )
+        );
+
+      for (
+        const message of
+          botMessages.values()
+      ) {
+        await message
+          .delete()
+          .catch(() => {});
+      }
+    } catch (error) {
+      logger.warn(
+        {
+          error:
+            error?.message,
+          channelId:
+            VERIFICATION_CHANNEL_ID
+        },
+        "Could not clean previous verification panel"
+      );
+    }
+
+    const embed =
+      new EmbedBuilder()
+        .setColor("#5865F2")
+        .setTitle(
+          "🛡️ NexusAI Verification"
+        )
+        .setDescription(
+          [
+            "Welcome to **NexusAI**!",
+            "",
+            "Before accessing the server, please complete the verification process.",
+            "",
+            "**Step 1 — Start**",
+            "Click **Start Verification** below.",
+            "",
+            "**Step 2 — Security Check**",
+            "Complete the verification challenge shown to you.",
+            "",
+            "**Step 3 — Verified**",
+            "Once successful, you'll receive the **Verified** role.",
+            "",
+            "🔒 Your verification is private.",
+            "🛡️ Never share passwords or account credentials with anyone."
+          ].join("\n")
+        )
+        .setFooter({
+          text:
+            "NexusAI • Secure Server Verification"
+        })
+        .setTimestamp();
+
+    const row =
+      new ActionRowBuilder()
+        .addComponents(
+          new ButtonBuilder()
+            .setCustomId(
+              "verification_start"
+            )
+            .setLabel(
+              "Start Verification"
+            )
+            .setEmoji("🛡️")
+            .setStyle(
+              ButtonStyle.Primary
+            )
+        );
+
+    const message =
+      await channel.send({
+        embeds: [
+          embed
+        ],
+        components: [
+          row
+        ]
+      });
+
+    logger.info(
+      {
+        channelId:
+          VERIFICATION_CHANNEL_ID,
+        messageId:
+          message.id
+      },
+      "✅ Verification panel sent"
+    );
+
+    return message;
+  }
+
+  // ==========================================================
+  // VERIFICATION STEP 1
+  // ==========================================================
+
+  async startVerification(
+    interaction
+  ) {
+    const userId =
+      interaction.user.id;
+
+    /*
+     * Already verified?
+     */
+    if (
+      interaction.guild &&
+      VERIFIED_ROLE_ID
+    ) {
+      const member =
+        await interaction.guild.members
+          .fetch(userId)
+          .catch(
+            () => null
+          );
+
+      if (
+        member?.roles.cache.has(
+          VERIFIED_ROLE_ID
+        )
+      ) {
+        return interaction.reply({
+          content:
+            "✅ You are already verified.",
+          flags:
+            MessageFlags.Ephemeral
+        });
+      }
+    }
+
+    /*
+     * Generate a simple temporary challenge.
+     */
+    const first =
+      Math.floor(
+        Math.random() * 9
+      ) + 1;
+
+    const second =
+      Math.floor(
+        Math.random() * 9
+      ) + 1;
+
+    const answer =
+      String(
+        first + second
+      );
+
+    this.verificationSessions.set(
+      userId,
+      {
+        step:
+          2,
+        answer,
+        createdAt:
+          Date.now()
+      }
+    );
+
+    /*
+     * Automatically expire after 5 minutes.
+     */
+    setTimeout(
+      () => {
+        const session =
+          this.verificationSessions.get(
+            userId
+          );
+
+        if (
+          session &&
+          session.answer ===
+            answer
+        ) {
+          this.verificationSessions.delete(
+            userId
+          );
+        }
+      },
+      300000
+    );
+
+    const modal =
+      new ModalBuilder()
+        .setCustomId(
+          `verification_captcha_${userId}`
+        )
+        .setTitle(
+          "🛡️ NexusAI Security Check"
+        );
+
+    const answerInput =
+      new TextInputBuilder()
+        .setCustomId(
+          "captcha_answer"
+        )
+        .setLabel(
+          `What is ${first} + ${second}?`
+        )
+        .setPlaceholder(
+          "Enter the answer"
+        )
+        .setStyle(
+          TextInputStyle.Short
+        )
+        .setRequired(
+          true
+        )
+        .setMaxLength(
+          3
+        );
+
+    modal.addComponents(
+      new ActionRowBuilder()
+        .addComponents(
+          answerInput
+        )
+    );
+
+    await interaction.showModal(
+      modal
+    );
+  }
+
+  // ==========================================================
+  // VERIFICATION STEP 2
+  // ==========================================================
+
+  async handleVerificationCaptcha(
+    interaction
+  ) {
+    const userId =
+      interaction.user.id;
+
+    const session =
+      this.verificationSessions.get(
+        userId
+      );
+
+    if (!session) {
+      return interaction.reply({
+        content:
+          "❌ Your verification session has expired. Please start again.",
+        flags:
+          MessageFlags.Ephemeral
+      });
+    }
+
+    if (
+      session.step !== 2
+    ) {
+      return interaction.reply({
+        content:
+          "❌ Your verification session is invalid. Please start again.",
+        flags:
+          MessageFlags.Ephemeral
+      });
+    }
+
+    const submitted =
+      interaction.fields
+        .getTextInputValue(
+          "captcha_answer"
+        )
+        .trim();
+
+    if (
+      submitted !==
+      session.answer
+    ) {
+      this.verificationSessions.delete(
+        userId
+      );
+
+      return interaction.reply({
+        content:
+          "❌ Verification failed. Please start the verification process again.",
+        flags:
+          MessageFlags.Ephemeral
+      });
+    }
+
+    /*
+     * Move to step 3.
+     */
+    session.step = 3;
+
+    await interaction.deferReply({
+      flags:
+        MessageFlags.Ephemeral
+    });
+
+    if (
+      !interaction.guild
+    ) {
+      this.verificationSessions.delete(
+        userId
+      );
+
+      return interaction.editReply({
+        content:
+          "❌ Verification must be completed inside the server."
+      });
+    }
+
+    if (
+      !VERIFIED_ROLE_ID
+    ) {
+      this.verificationSessions.delete(
+        userId
+      );
+
+      return interaction.editReply({
+        content:
+          "⚠️ The verification system is not configured yet. Please set `VERIFIED_ROLE_ID` in `.env`."
+      });
+    }
+
+    /*
+     * Get guild member.
+     */
+    const member =
+      await interaction.guild.members
+        .fetch(userId)
+        .catch(
+          () => null
+        );
+
+    if (!member) {
+      this.verificationSessions.delete(
+        userId
+      );
+
+      return interaction.editReply({
+        content:
+          "❌ Your server member record could not be found."
+      });
+    }
+
+    /*
+     * STEP 3:
+     * Add Verified role.
+     */
+    try {
+      await member.roles.add(
+        VERIFIED_ROLE_ID,
+        "Completed NexusAI 3-step verification"
+      );
+
+      this.verificationSessions.delete(
+        userId
+      );
+
+      logger.info(
+        {
+          userId,
+          username:
+            interaction.user.username,
+          guildId:
+            interaction.guild.id,
+          roleId:
+            VERIFIED_ROLE_ID
+        },
+        "✅ User completed verification"
+      );
+
+      await interaction.editReply({
+        content:
+          "✅ **Verification complete!**\n\nYou have passed the security check and received the **Verified** role."
+      });
+    } catch (error) {
+      logger.error(
+        {
+          userId,
+          guildId:
+            interaction.guild.id,
+          roleId:
+            VERIFIED_ROLE_ID,
+          error:
+            error?.message,
+          stack:
+            error?.stack
+        },
+        "Failed to assign verified role"
+      );
+
+      this.verificationSessions.delete(
+        userId
+      );
+
+      await interaction.editReply({
+        content:
+          "❌ Verification succeeded, but I could not assign the Verified role. Please check my role permissions and hierarchy."
+      });
+    }
+  }
+
+    // ==========================================================
+  // LOGIN TYPE MENU
+  // ==========================================================
+
+  async showLoginTypeMenu(
+    interaction,
+    platform
+  ) {
+    const embed =
+      new EmbedBuilder()
+        .setColor("#F4A300")
+        .setAuthor({
+          name:
+            "🥭 NexusAI"
+        })
+        .setTitle(
+          "🔐 Choose Your Login Method"
+        )
+        .setDescription(
+          [
+            `### ${
+              platform?.emoji ??
+              "🥭"
+            } ${
+              platform?.name ??
+              platform
+            }`,
+            "",
+            "Select the method you normally use to access your account.",
+            "",
+            "🔐 **Sparx Login**",
+            "> Sign in with your **Sparx username and password**.",
+            "",
+            "🪟 **Microsoft Login**",
+            "> Sign in using your **Microsoft school account**.",
+            "",
+            "━━━━━━━━━━━━━━━━━━━━",
+            "🔒 Your credentials are handled securely."
+          ].join("\n")
+        )
+        .setFooter({
+          text:
+            "🥭 NexusAI • Secure Account Login"
+        })
+        .setTimestamp();
+
+    const select =
+      new StringSelectMenuBuilder()
+        .setCustomId(
+          `login_type_${platform}`
+        )
+        .setPlaceholder(
+          "🔐 Select a login method..."
+        )
+        .addOptions(
+          {
+            label:
+              "Sparx Username & Password",
+            description:
+              "Use your normal Sparx login details",
+            value:
+              "password",
+            emoji:
+              "🔐"
+          },
+          {
+            label:
+              "Microsoft Account",
+            description:
+              "Use your school Microsoft account",
+            value:
+              "microsoft",
+            emoji:
+              "🪟"
+          }
+        );
+
+    const row =
+      new ActionRowBuilder()
+        .addComponents(
+          select
+        );
+
+    return interaction.reply({
+      embeds: [
+        embed
+      ],
+      components: [
+        row
+      ],
+      flags:
+        MessageFlags.Ephemeral
+    });
+  }
+
+  // ==========================================================
+  // LOGIN MODAL
+  // ==========================================================
+
+  async openLoginModal(
+    interaction,
+    platform,
+    loginType = "password"
+  ) {
+    const modal =
+      new ModalBuilder()
+        .setCustomId(
+          `school_login_${platform}_${loginType}`
+        )
+        .setTitle(
+          loginType ===
+          "microsoft"
+            ? `${platform} • Microsoft Login`
+            : `${platform} • Login`
+        );
+
+    const schoolInput =
+      new TextInputBuilder()
+        .setCustomId(
+          "school"
+        )
+        .setLabel(
+          "School"
+        )
+        .setStyle(
+          TextInputStyle.Short
+        )
+        .setPlaceholder(
+          "Enter your school name"
+        )
+        .setRequired(
+          true
+        );
+
+    const usernameInput =
+      new TextInputBuilder()
+        .setCustomId(
+          loginType ===
+          "microsoft"
+            ? "email"
+            : "username"
+        )
+        .setLabel(
+          loginType ===
+          "microsoft"
+            ? "Microsoft Email"
+            : "Username"
+        )
+        .setStyle(
+          TextInputStyle.Short
+        )
+        .setPlaceholder(
+          loginType ===
+          "microsoft"
+            ? "example@outlook.com"
+            : "Enter your Sparx username"
+        )
+        .setRequired(
+          true
+        );
+
+    const passwordInput =
+      new TextInputBuilder()
+        .setCustomId(
+          "password"
+        )
+        .setLabel(
+          "Password"
+        )
+        .setStyle(
+          TextInputStyle.Short
+        )
+        .setPlaceholder(
+          "Enter your password"
+        )
+        .setRequired(
+          true
+        );
+
+    modal.addComponents(
+      new ActionRowBuilder()
+        .addComponents(
+          schoolInput
+        ),
+
+      new ActionRowBuilder()
+        .addComponents(
+          usernameInput
+        ),
+
+      new ActionRowBuilder()
+        .addComponents(
+          passwordInput
+        )
+    );
+
+    logger.info(
+      {
+        platform,
+        loginType
+      },
+      "Login modal opened"
+    );
+
+    return interaction.showModal(
+      modal
+    );
+  }
+
+  // ==========================================================
+  // LOGIN MODAL SUBMISSION
+  // ==========================================================
+
+  async handleLoginModal(
+    interaction
+  ) {
+    await interaction.deferReply({
+      flags:
+        MessageFlags.Ephemeral
+    });
+
+    const parts =
+      interaction.customId.split(
+        "_"
+      );
+
+    /*
+     * Example:
+     *
+     * school_login_sparxMaths_password
+     *
+     * parts:
+     * [school, login, sparxMaths, password]
+     */
+
+    const platform =
+      parts
+        .slice(2, -1)
+        .join("_");
+
+    const loginType =
+      parts[
+        parts.length - 1
+      ];
+
+    const school =
+      interaction.fields
+        .getTextInputValue(
+          "school"
+        );
+
+    const password =
+      interaction.fields
+        .getTextInputValue(
+          "password"
+        );
+
+    const username =
+      loginType ===
+      "microsoft"
+        ? null
+        : interaction.fields
+            .getTextInputValue(
+              "username"
+            );
+
+    const email =
+      loginType ===
+      "microsoft"
+        ? interaction.fields
+            .getTextInputValue(
+              "email"
+            )
+        : null;
+
+    logger.info(
+      {
+        platform,
+        loginType,
+        school,
+        username,
+        email,
+        passwordReceived:
+          Boolean(
+            password
+          )
+      },
+      "Login modal submitted"
+    );
+
+    try {
+      if (
+        !this.loginService ||
+        typeof
+          this.loginService
+            .dispatchPlatformLogin !==
+          "function"
+      ) {
+        throw new Error(
+          "Login service is not available."
+        );
+      }
+
+      const payload = {
+        adapter:
+          "sparx",
+
+        action:
+          "login",
+
+        platform,
+
+        school,
+
+        method:
+          loginType ===
+          "microsoft"
+            ? "microsoft"
+            : "password",
+
+        username,
+
+        email,
+
+        password,
+
+        discordUserId:
+          interaction.user.id,
+
+        discordUsername:
+          interaction.user.username,
+
+        guildId:
+          interaction.guild?.id ??
+          null
+      };
+
+      await this.loginService
+        .dispatchPlatformLogin(
+          platform,
+          payload
+        );
+
+      await interaction.editReply({
+        content:
+          [
+            "✅ **Login request submitted successfully!**",
+            "",
+            `**Platform:** ${platform}`,
+            `**Login Type:** ${
+              loginType ===
+              "microsoft"
+                ? "Microsoft"
+                : "Normal Sparx"
+            }`,
+            `**School:** ${school}`,
+            loginType ===
+            "microsoft"
+              ? `**Email:** ${email}`
+              : `**Username:** ${username}`,
+            "",
+            "🔐 Your credentials were received securely."
+          ].join("\n")
+      });
+    } catch (error) {
+      logger.error(
+        {
+          error:
+            error?.message,
+          stack:
+            error?.stack,
+          platform,
+          loginType,
+          userId:
+            interaction.user.id
+        },
+        "Failed to dispatch login"
+      );
+
+      await interaction.editReply({
+        content:
+          `❌ Failed to submit login request: ${
+            error?.message ??
+            "Unknown error"
+          }`
+      });
+    }
+  }
+
+  // ==========================================================
+  // COOKIE LOGIN
+  // ==========================================================
+
+  async handleCookieModalSubmit(
+    interaction
+  ) {
+    if (
+      this.loginService?.handleCookieModal
+    ) {
+      return this.loginService
+        .handleCookieModal(
+          interaction
+        );
+    }
+
+    const platform =
+      interaction.customId.replace(
+        "cookie_login_",
+        ""
+      );
+
+    let cookies;
+
+    try {
+      cookies =
+        interaction.fields
+          .getTextInputValue(
+            "cookies_input"
+          );
+    } catch {
+      cookies = "";
+    }
+
+    if (!cookies?.trim()) {
+      return interaction.reply({
+        content:
+          "❌ No cookies were provided.",
+        flags:
+          MessageFlags.Ephemeral
+      });
+    }
+
+    logger.info(
+      {
+        platform,
+        userId:
+          interaction.user.id
+      },
+      "Cookie session submitted"
+    );
+
+    return interaction.reply({
+      content:
+        [
+          `🍪 Cookie session received for **${platform}**.`,
+          "",
+          "The session will be processed by the login service.",
+          "",
+          "🔒 Never post authentication cookies publicly."
+        ].join("\n"),
+      flags:
+        MessageFlags.Ephemeral
+    });
+  }
+
+  // ==========================================================
+  // SAVED ACCOUNTS
+  // ==========================================================
+
+  async handleSavedAccounts(
+    interaction,
+    platform
+  ) {
+    if (
+      this.loginService?.handleSavedAccounts
+    ) {
+      return this.loginService
+        .handleSavedAccounts(
+          interaction,
+          platform
+        );
+    }
+
+    return interaction.reply({
+      content:
+        `💾 Fetching saved accounts for **${platform}**...`,
+      flags:
+        MessageFlags.Ephemeral
+    });
+  }
+
+  // ==========================================================
+  // COMMAND HANDLER
+  // ==========================================================
+
+  async handleCommand(
+    command,
+    args,
+    message
+  ) {
+    logger.info(
+      {
+        command,
+        author:
+          message.author?.username
+      },
+      "Command received"
+    );
+
+    /*
+     * Give the application's command handler
+     * first opportunity to process the command.
+     */
+
+    if (
+      this.commandHandler &&
+      this.commandHandler.commands?.has(
+        command
+      )
+    ) {
+      return this.commandHandler.commands.get(
+        command
+      )(message, args);
+    }
+
+    switch (
+      command
+    ) {
+      case "help":
+        return this.handleHelp(
+          message
+        );
+
+      case "solve":
+        return this.handleSolve(
+          message,
+          args
+        );
+
+      case "status":
+        return this.handleStatus(
+          message
+        );
+
+      case "ping":
+        return this.replyToChannel(
+          message,
+          `🏓 Pong! ${this.client.ws.ping}ms`
+        );
+
+      case "verify":
+        /*
+         * Manual verification command.
+         */
+        return this.startManualVerificationCommand(
+          message
+        );
+
+      default:
+        return this.replyToChannel(
+          message,
+          "❓ Unknown command. Use `!help`"
+        );
+    }
+  }
+
+  // ==========================================================
+  // MANUAL VERIFICATION COMMAND
+  // ==========================================================
+
+  async startManualVerificationCommand(
+    message
+  ) {
+    if (
+      !message.guild
+    ) {
+      return message.reply(
+        "❌ Verification can only be started inside a server."
+      );
+    }
+
+    /*
+     * We cannot directly show a modal from a normal
+     * message, so send the user to the verification
+     * panel instead.
+     */
+
+    const embed =
+      new EmbedBuilder()
+        .setColor(
+          "#5865F2"
+        )
+        .setTitle(
+          "🛡️ Verification"
+        )
+        .setDescription(
+          "Click the button below to begin verification."
+        );
+
+    const row =
+      new ActionRowBuilder()
+        .addComponents(
+          new ButtonBuilder()
+            .setCustomId(
+              "verification_start"
+            )
+            .setLabel(
+              "Start Verification"
+            )
+            .setEmoji(
+              "🛡️"
+            )
+            .setStyle(
+              ButtonStyle.Primary
+            )
+        );
+
+    return message.reply({
+      embeds: [
+        embed
+      ],
+      components: [
+        row
+      ]
+    });
+  }
+
+  // ==========================================================
+  // HELP
+  // ==========================================================
+
+  async handleHelp(
+    message
+  ) {
+    const embed =
+      new EmbedBuilder()
+        .setColor(
+          "#0099FF"
+        )
+        .setTitle(
+          "📚 NexusAI Commands"
+        )
+        .addFields(
+          {
+            name:
+              "Homework",
+            value:
+              [
+                "`!homework` — View homework",
+                "`!homework create [subject] [name]` — Create task",
+                "`!tasks` — Homework alias"
+              ].join("\n")
+          },
+          {
+            name:
+              "Premium",
+            value:
+              [
+                "`!premium` — View premium tiers",
+                "`!trial claim` — Start free trial"
+              ].join("\n")
+          },
+          {
+            name:
+              "Queue",
+            value:
+              [
+                "`!queue` — View queue",
+                "`!join [platform]` — Join queue"
+              ].join("\n")
+          },
+          {
+            name:
+              "Past Papers",
+            value:
+              [
+                "`!pastpapers` — Latest papers",
+                "`!pastpapers <subject>` — Search papers"
+              ].join("\n")
+          },
+          {
+            name:
+              "Scheduler",
+            value:
+              [
+                "`!schedule` — View schedules",
+                "`!schedule create [platform] [time]` — Create schedule"
+              ].join("\n")
+          },
+          {
+            name:
+              "Verification",
+            value:
+              "`!verify` — Start verification"
+          },
+          {
+            name:
+              "Information",
+            value:
+              [
+                "`!stats` — Bot statistics",
+                "`!status` — Bot status",
+                "`!ping` — Check latency"
+              ].join("\n")
+          }
+        )
+        .setFooter({
+          text:
+            "🥭 NexusAI"
+        })
+        .setTimestamp();
+
+    return this.replyToChannel(
+      message,
+      {
+        embeds: [
+          embed
+        ]
+      }
+    );
+  }
+
+  // ==========================================================
+  // SOLVE
+  // ==========================================================
+
+  async handleSolve(
+    message,
+    args
+  ) {
+    if (
+      args.length <
+      2
+    ) {
+      return this.replyToChannel(
+        message,
+        "❌ Usage: `!solve <platform> <question>`"
+      );
+    }
+
+    const platform =
+      args[0].toLowerCase();
+
+    const question =
+      args
+        .slice(1)
+        .join(" ");
+
+    return this.replyToChannel(
+      message,
+      [
+        `🔄 Processing your request for **${platform}**...`,
+        "",
+        `**Question:** ${question}`
+      ].join("\n")
+    );
+  }
+
+  // ==========================================================
+  // STATUS
+  // ==========================================================
+
+  async handleStatus(
+    message
+  ) {
+    const guildSession =
+      message.guild
+        ? this.activeSessions.get(
+            message.guild.id
+          )
+        : null;
+
+    const embed =
+      new EmbedBuilder()
+        .setColor(
+          "#00FF00"
+        )
+        .setTitle(
+          "✅ NexusAI Status"
+        )
+        .addFields(
+          {
+            name:
+              "Status",
+            value:
+              "Online",
+            inline:
+              true
+          },
+          {
+            name:
+              "Ping",
+            value:
+              `${this.client.ws.ping}ms`,
+            inline:
+              true
+          },
+          {
+            name:
+              "Uptime",
+            value:
+              this.formatUptime(
+                this.client.uptime
+              ),
+            inline:
+              true
+          },
+          {
+            name:
+              "Version",
+            value:
+              "2.0.0",
+            inline:
+              true
+          },
+          {
+            name:
+              "Auto Channels",
+            value:
+              guildSession
+                ? "Enabled"
+                : "Disabled",
+            inline:
+              true
+          },
+          {
+            name:
+              "Verification",
+            value:
+              VERIFIED_ROLE_ID
+                ? "Configured"
+                : "Role not configured",
+            inline:
+              true
+          }
+        )
+        .setTimestamp();
+
+    return this.replyToChannel(
+      message,
+      {
+        embeds: [
+          embed
+        ]
+      }
+    );
+  }
+
+  // ==========================================================
+  // GUILD SESSION
+  // ==========================================================
+
+  async ensureGuildSession(
+    _message
+  ) {
     return null;
   }
 
-  async getChannelByConfigKey(key) {
-    const channelId = config.discord.channels?.[key];
-    if (!channelId || !this.client) return null;
+  // ==========================================================
+  // CHANNEL HELPERS
+  // ==========================================================
 
-    let channel = this.client.channels.cache.get(channelId);
+  async getChannelByConfigKey(
+    key
+  ) {
+    const channelId =
+      config.discord.channels?.[
+        key
+      ];
+
+    if (
+      !channelId ||
+      !this.client
+    ) {
+      return null;
+    }
+
+    let channel =
+      this.client.channels.cache.get(
+        channelId
+      );
+
     if (!channel) {
-      channel = await this.client.channels.fetch(channelId).catch(() => null);
+      channel =
+        await this.client.channels
+          .fetch(
+            channelId
+          )
+          .catch(
+            () => null
+          );
     }
 
     if (!channel) {
-      logger.warn({ channelKey: key, channelId }, 'Configured Discord channel not found');
+      logger.warn(
+        {
+          channelKey:
+            key,
+          channelId
+        },
+        "Configured Discord channel not found"
+      );
     }
 
     return channel;
   }
 
-  async sendToConfiguredChannel(key, payload, fallbackChannel = null) {
-    const channel = await this.getChannelByConfigKey(key);
+  async sendToConfiguredChannel(
+    key,
+    payload,
+    fallbackChannel = null
+  ) {
+    const channel =
+      await this.getChannelByConfigKey(
+        key
+      );
 
     if (channel) {
       logger.info(
-        { channelKey: key, channelId: channel.id },
-        'Sending message to configured Discord channel'
+        {
+          channelKey:
+            key,
+          channelId:
+            channel.id
+        },
+        "Sending message to configured Discord channel"
       );
-      return channel.send(payload);
+
+      return channel.send(
+        payload
+      );
     }
 
     if (fallbackChannel) {
-      logger.info({ channelKey: key }, 'Falling back to current Discord channel');
-      return fallbackChannel.send(payload);
+      logger.info(
+        {
+          channelKey:
+            key
+        },
+        "Falling back to current Discord channel"
+      );
+
+      return fallbackChannel.send(
+        payload
+      );
     }
 
     return null;
   }
 
-  async acknowledgeInteraction(interaction, isV2Override = null) {
-  try {
-    if (!interaction.deferred && !interaction.replied) {
+  // ==========================================================
+  // INTERACTION ACKNOWLEDGEMENT
+  // ==========================================================
 
-      const isV2 = isV2Override !== null
-        ? isV2Override
-        : (
-            interaction.customId === 'platform_join_queue' ||
-            interaction.customId === 'join_queue'
-          );
+  async acknowledgeInteraction(
+    interaction
+  ) {
+    try {
+      if (
+        !interaction.deferred &&
+        !interaction.replied
+      ) {
+        await interaction.deferReply({
+          flags:
+            MessageFlags.Ephemeral
+        });
 
-      const flags = isV2
-        ? MessageFlags.IsComponentsV2
-        : MessageFlags.Ephemeral;
-
-      await interaction.deferReply({ flags });
+        logger.debug(
+          {
+            customId:
+              interaction.customId
+          },
+          "Interaction deferred"
+        );
+      }
+    } catch (error) {
+      logger.error(
+        {
+          error:
+            error?.message,
+          customId:
+            interaction?.customId
+        },
+        "Failed to acknowledge interaction"
+      );
     }
-  } catch (error) {
-    logger.error(
-      { error: error.message },
-      'Failed to acknowledge interaction'
+  }
+
+  // ==========================================================
+  // PLATFORM DEFINITION
+  // ==========================================================
+
+  getPlatformDefinition(
+    platformKey
+  ) {
+    const normalizedKey =
+      String(
+        platformKey ??
+        ""
+      ).trim();
+
+    if (
+      !normalizedKey
+    ) {
+      return null;
+    }
+
+    if (
+      this.platformService?.getPlatform
+    ) {
+      const servicePlatform =
+        this.platformService.getPlatform(
+          normalizedKey
+        );
+
+      if (servicePlatform) {
+        return servicePlatform;
+      }
+    }
+
+    const fallbackMap = {
+      sparxMaths: {
+        name:
+          "Sparx Maths",
+        key:
+          "sparxMaths",
+        emoji:
+          "<:SparxMaths:1515672129188790302>"
+      },
+
+      sparxReader: {
+        name:
+          "Sparx Reader",
+        key:
+          "sparxReader",
+        emoji:
+          "<:SparxReader:1515672202375204945>"
+      },
+
+      sparxScience: {
+        name:
+          "Sparx Science",
+        key:
+          "sparxScience",
+        emoji:
+          "<:SparxScience:1515672274051797072>"
+      },
+
+      languagenut: {
+        name:
+          "LanguageNut",
+        key:
+          "languagenut",
+        emoji:
+          "<:LanguageNut:1515672374878670858>"
+      },
+
+      bedrock: {
+        name:
+          "Bedrock",
+        key:
+          "bedrock",
+        emoji:
+          "<:Bedrock:1529265581273124935>"
+      },
+
+      seneca: {
+        name:
+          "Seneca",
+        key:
+          "seneca",
+        emoji:
+          "<:Seneca:1515672492512120963>"
+      }
+    };
+
+    return (
+      fallbackMap[
+        normalizedKey
+      ] ??
+      null
     );
   }
-}
 
-  async handleButtonInteraction(interaction) {
+    // ==========================================================
+  // BUTTON INTERACTIONS
+  // ==========================================================
 
-  const parts = interaction.customId.split('_');
-  const group = parts.shift();
-  const action = parts.join('_');
+  async handleButtonInteraction(
+    interaction
+  ) {
+    const customId =
+      interaction.customId ?? "";
 
-  const isV2 = (group === 'platform' && action === 'join_queue');
+    logger.info(
+      {
+        customId,
+        userId:
+          interaction.user?.id,
+        username:
+          interaction.user?.username
+      },
+      "Button interaction received"
+    );
 
-  // Do not defer Components V2 replies
-  if (!isV2) {
-    await this.acknowledgeInteraction(interaction);
+    // ========================================================
+    // 3-STEP VERIFICATION
+    // ========================================================
+
+    if (
+      customId ===
+      "verification_start"
+    ) {
+      return this.startVerification(
+        interaction
+      );
+    }
+
+    if (
+      customId ===
+      "verification_step1"
+    ) {
+      return this.handleVerificationStep1(
+        interaction
+      );
+    }
+
+    if (
+      customId ===
+      "verification_step2"
+    ) {
+      return this.handleVerificationStep2(
+        interaction
+      );
+    }
+
+    if (
+      customId ===
+      "verification_step3"
+    ) {
+      return this.handleVerificationStep3(
+        interaction
+      );
+    }
+
+    // ========================================================
+    // SPLIT BUTTON ID
+    // ========================================================
+
+    const parts =
+      customId.split("_");
+
+    const group =
+      parts.shift();
+
+    const action =
+      parts.join("_");
+
+    // ========================================================
+    // JOIN QUEUE
+    // ========================================================
+
+    if (
+      group === "platform" &&
+      action === "join_queue"
+    ) {
+      return this.handleJoinQueueButton(
+        interaction
+      );
+    }
+
+    // ========================================================
+    // HOMEWORK
+    // ========================================================
+
+    if (
+      group === "homework"
+    ) {
+      await this.acknowledgeInteraction(
+        interaction
+      );
+
+      return this.handleHomeworkButton(
+        interaction,
+        action
+      );
+    }
+
+    // ========================================================
+    // PAST PAPERS
+    // ========================================================
+
+    if (
+      group === "pastpapers"
+    ) {
+      await this.acknowledgeInteraction(
+        interaction
+      );
+
+      return this.handlePastPapersButton(
+        interaction,
+        action
+      );
+    }
+
+    // ========================================================
+    // PLATFORM
+    // ========================================================
+
+    if (
+      group === "platform"
+    ) {
+      await this.acknowledgeInteraction(
+        interaction
+      );
+
+      return this.handlePlatformButton(
+        interaction,
+        action
+      );
+    }
+
+    // ========================================================
+    // SCHEDULE
+    // ========================================================
+
+    if (
+      group === "schedule"
+    ) {
+      await this.acknowledgeInteraction(
+        interaction
+      );
+
+      return this.handleScheduleButton(
+        interaction,
+        action
+      );
+    }
+
+    // ========================================================
+    // SUPPORT
+    // ========================================================
+
+    if (
+      group === "support"
+    ) {
+      await this.acknowledgeInteraction(
+        interaction
+      );
+
+      return this.handleSupportButton(
+        interaction,
+        action
+      );
+    }
+
+    // ========================================================
+    // TICKETS
+    // ========================================================
+
+    if (
+      group === "ticket"
+    ) {
+      await this.acknowledgeInteraction(
+        interaction
+      );
+
+      return this.handleTicketButton(
+        interaction,
+        action
+      );
+    }
+
+    // ========================================================
+    // LOGIN
+    // ========================================================
+
+    if (
+      group === "login"
+    ) {
+      const platform =
+        this.getPlatformDefinition(
+          action
+        );
+
+      if (!platform) {
+        return this.respondToInteraction(
+          interaction,
+          {
+            content:
+              "❌ Unknown platform.",
+            flags:
+              MessageFlags.Ephemeral
+          }
+        );
+      }
+
+      return this.showLoginTypeMenu(
+        interaction,
+        platform
+      );
+    }
+
+    // ========================================================
+    // COOKIE SESSION
+    // ========================================================
+
+    if (
+      group === "cookies"
+    ) {
+      if (
+        !this.loginService
+      ) {
+        return this.respondToInteraction(
+          interaction,
+          {
+            content:
+              "❌ Login service is unavailable.",
+            flags:
+              MessageFlags.Ephemeral
+          }
+        );
+      }
+
+      if (
+        typeof
+          this.loginService
+            .openCookieModal ===
+        "function"
+      ) {
+        return this.loginService
+          .openCookieModal(
+            interaction,
+            action
+          );
+      }
+
+      return this.respondToInteraction(
+        interaction,
+        {
+          content:
+            "❌ Cookie login is not available.",
+          flags:
+            MessageFlags.Ephemeral
+        }
+      );
+    }
+
+    // ========================================================
+    // SAVED ACCOUNT
+    // ========================================================
+
+    if (
+      group === "saved"
+    ) {
+      return this.handleSavedAccounts(
+        interaction,
+        action
+      );
+    }
+
+    // ========================================================
+    // UNKNOWN
+    // ========================================================
+
+    return this.respondToInteraction(
+      interaction,
+      {
+        content:
+          "❌ Unknown button action.",
+        flags:
+          MessageFlags.Ephemeral
+      }
+    );
   }
 
+  // ==========================================================
+  // JOIN QUEUE BUTTON
+  // ==========================================================
 
-  if (group === 'homework') {
-    return this.handleHomeworkButton(interaction, action);
+  async handleJoinQueueButton(
+    interaction
+  ) {
+    const gifPath =
+      path.join(
+        __dirname,
+        "../../standard.gif"
+      );
+
+    const hasGif =
+      fs.existsSync(
+        gifPath
+      );
+
+    try {
+      const container =
+        ContainerFactory.buildJoinQueueContainer(
+          hasGif
+        );
+
+      const payload = {
+        components: [
+          container
+        ],
+        flags:
+          MessageFlags.IsComponentsV2 |
+          MessageFlags.Ephemeral
+      };
+
+      if (
+        hasGif
+      ) {
+        payload.files = [
+          new AttachmentBuilder(
+            gifPath,
+            {
+              name:
+                "standard.gif"
+            }
+          )
+        ];
+      }
+
+      if (
+        interaction.deferred ||
+        interaction.replied
+      ) {
+        return interaction.editReply(
+          payload
+        );
+      }
+
+      return interaction.reply(
+        payload
+      );
+    } catch (error) {
+      logger.error(
+        {
+          error:
+            error?.message,
+          stack:
+            error?.stack
+        },
+        "Join queue interaction failed"
+      );
+
+      return this.respondToInteraction(
+        interaction,
+        {
+          content:
+            `❌ Unable to open the queue: ${
+              error?.message ??
+              "Unknown error"
+            }`,
+          flags:
+            MessageFlags.Ephemeral
+        }
+      );
+    }
   }
 
-  if (group === 'pastpapers') {
-    return this.handlePastPapersButton(interaction, action);
+  // ==========================================================
+  // HOMEWORK BUTTON
+  // ==========================================================
+
+  async handleHomeworkButton(
+    interaction,
+    action
+  ) {
+    const embed =
+      new EmbedBuilder()
+        .setColor(
+          "#5865F2"
+        )
+        .setTitle(
+          "📚 Homework Tracker"
+        )
+        .setDescription(
+          `Current homework status for **${
+            interaction.user.username
+          }**:`
+        )
+        .addFields(
+          {
+            name:
+              "Sparx Maths",
+            value:
+              "All tasks up to date",
+            inline:
+              true
+          },
+          {
+            name:
+              "Sparx Reader",
+            value:
+              "1 reading task due",
+            inline:
+              true
+          },
+          {
+            name:
+              "Seneca",
+            value:
+              "No pending modules",
+            inline:
+              true
+          }
+        )
+        .setFooter({
+          text:
+            "🥭 NexusAI Homework Manager"
+        })
+        .setTimestamp();
+
+    return this.respondToInteraction(
+      interaction,
+      {
+        embeds: [
+          embed
+        ]
+      }
+    );
   }
 
-  if (group === 'platform') {
-    return this.handlePlatformButton(interaction, action);
+  // ==========================================================
+  // PAST PAPERS BUTTON
+  // ==========================================================
+
+  async handlePastPapersButton(
+    interaction,
+    action
+  ) {
+    const embed =
+      new EmbedBuilder()
+        .setColor(
+          "#3BA55C"
+        )
+        .setTitle(
+          "📄 Past Papers Library"
+        )
+        .setDescription(
+          "Search for GCSE & A-Level past papers by subject:"
+        )
+        .addFields(
+          {
+            name:
+              "Subjects Available",
+            value:
+              "Maths, Biology, Chemistry, Physics, Computer Science"
+          },
+          {
+            name:
+              "Commands",
+            value:
+              "Use `!pastpapers <subject>` for direct links."
+          }
+        )
+        .setFooter({
+          text:
+            "🥭 NexusAI Study Resources"
+        })
+        .setTimestamp();
+
+    return this.respondToInteraction(
+      interaction,
+      {
+        embeds: [
+          embed
+        ]
+      }
+    );
   }
 
-  if (group === 'schedule') {
-    return this.handleScheduleButton(interaction, action);
+  // ==========================================================
+  // SCHEDULE BUTTON
+  // ==========================================================
+
+  async handleScheduleButton(
+    interaction,
+    action
+  ) {
+    const manager =
+      this.app?.scheduleManager;
+
+    if (
+      manager
+    ) {
+      const schedules =
+        manager.getUserSchedules(
+          interaction.user.id
+        );
+
+      const embed =
+        EmbedFactory.buildScheduleEmbed(
+          schedules
+        );
+
+      const buttons =
+        ActionRowFactory.buildScheduleButtons();
+
+      return this.respondToInteraction(
+        interaction,
+        {
+          embeds: [
+            embed
+          ],
+          components: [
+            buttons
+          ]
+        }
+      );
+    }
+
+    const embed =
+      new EmbedBuilder()
+        .setColor(
+          "#FAA61A"
+        )
+        .setTitle(
+          "⏰ Auto-Schedule Manager"
+        )
+        .setDescription(
+          "Automated auto-solver routines:"
+        )
+        .addFields(
+          {
+            name:
+              "Active Schedules",
+            value:
+              "None configured yet."
+          },
+          {
+            name:
+              "Setup",
+            value:
+              "Use `!schedule create [platform] [time]`"
+          }
+        )
+        .setFooter({
+          text:
+            "🥭 NexusAI Scheduler"
+        })
+        .setTimestamp();
+
+    return this.respondToInteraction(
+      interaction,
+      {
+        embeds: [
+          embed
+        ]
+      }
+    );
   }
 
-  if (group === 'support') {
-    return this.handleSupportButton(interaction, action);
+  // ==========================================================
+  // SUPPORT BUTTON
+  // ==========================================================
+
+  async handleSupportButton(
+    interaction,
+    action
+  ) {
+    const embed =
+      new EmbedBuilder()
+        .setColor(
+          "#ED4245"
+        )
+        .setTitle(
+          "🆘 NexusAI Support"
+        )
+        .setDescription(
+          "Need assistance?"
+        )
+        .addFields(
+          {
+            name:
+              "Guides",
+            value:
+              "Check channel pins or run `!help`."
+          },
+          {
+            name:
+              "Tickets",
+            value:
+              "Click **Create Support Ticket** below."
+          }
+        )
+        .setFooter({
+          text:
+            "🥭 NexusAI Support Desk"
+        })
+        .setTimestamp();
+
+    return this.respondToInteraction(
+      interaction,
+      {
+        embeds: [
+          embed
+        ]
+      }
+    );
   }
 
-  if (group === 'ticket') {
-    return this.handleTicketButton(interaction, action);
-  }
+  // ==========================================================
+  // TICKET BUTTON
+  // ==========================================================
 
-  return this.respondToInteraction(interaction, {
-    content: 'Button action not supported yet.'
-  });
-}
+  async handleTicketButton(
+    interaction,
+    action
+  ) {
+    const guild =
+      interaction.guild;
 
-  async handleHomeworkButton(interaction, action) {
-    const embed = new EmbedBuilder()
-      .setColor('#5865F2')
-      .setTitle('📚 Homework Tracker')
-      .setDescription(`Current homework status for **${interaction.user.username}**:`)
-      .addFields(
-        { name: 'Sparx Maths', value: 'All tasks up to date', inline: true },
-        { name: 'Sparx Reader', value: '1 Reading task due', inline: true },
-        { name: 'Seneca', value: 'No pending modules', inline: true }
-      )
-      .setFooter({ text: '🥭 MangoAI Homework Manager' });
-
-    return this.respondToInteraction(interaction, { embeds: [embed] });
-  }
-
-  async handlePastPapersButton(interaction, action) {
-    const embed = new EmbedBuilder()
-      .setColor('#3BA55C')
-      .setTitle('📄 Past Papers Library')
-      .setDescription('Search for GCSE & A-Level past papers by subject:')
-      .addFields(
-        { name: 'Subjects Available', value: 'Maths, Biology, Chemistry, Physics, Computer Science' },
-        { name: 'Commands', value: 'Use `!pastpapers <subject>` for direct links.' }
-      )
-      .setFooter({ text: '🥭 MangoAI Study Resources' });
-
-    return this.respondToInteraction(interaction, { embeds: [embed] });
-  }
-
-  async handleScheduleButton(interaction, action) {
-    const embed = new EmbedBuilder()
-      .setColor('#FAA61A')
-      .setTitle('⏰ Auto-Schedule Manager')
-      .setDescription('Automated auto-solver routines:')
-      .addFields(
-        { name: 'Active Schedules', value: 'None configured yet.' },
-        { name: 'Setup', value: 'Use `!schedule create [platform] [time]`' }
-      )
-      .setFooter({ text: '🥭 MangoAI Scheduler' });
-
-    return this.respondToInteraction(interaction, { embeds: [embed] });
-  }
-
-  async handleSupportButton(interaction, action) {
-    const embed = new EmbedBuilder()
-      .setColor('#ED4245')
-      .setTitle('🆘 MangoAI Support')
-      .setDescription('Need assistance?')
-      .addFields(
-        { name: 'Guides', value: 'Check channel pins or run `!help`.' },
-        { name: 'Tickets', value: 'Click **Create Support Ticket** below.' }
-      )
-      .setFooter({ text: '🥭 MangoAI Support Desk' });
-
-    return this.respondToInteraction(interaction, { embeds: [embed] });
-  }
-
-  async handleTicketButton(interaction, action) {
-    const guild = interaction.guild;
     if (!guild) {
-      return this.respondToInteraction(interaction, {
-        content: 'Tickets can only be created inside a server.'
-      });
+      return this.respondToInteraction(
+        interaction,
+        {
+          content:
+            "❌ Tickets can only be created inside a server."
+        }
+      );
     }
 
     try {
-      const channel = await guild.channels.create({
-        name: `ticket-${interaction.user.username}`,
-        type: ChannelType.GuildText,
-        permissionOverwrites: [
-          {
-            id: guild.id,
-            deny: [PermissionFlagsBits.ViewChannel]
-          },
-          {
-            id: interaction.user.id,
-            allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages]
-          }
+      const channel =
+        await guild.channels.create({
+          name:
+            `ticket-${interaction.user.username}`
+              .toLowerCase()
+              .replace(
+                /[^a-z0-9-]/g,
+                "-"
+              )
+              .slice(
+                0,
+                90
+              ),
+
+          type:
+            ChannelType.GuildText,
+
+          permissionOverwrites: [
+            {
+              id:
+                guild.id,
+
+              deny: [
+                PermissionFlagsBits.ViewChannel
+              ]
+            },
+
+            {
+              id:
+                interaction.user.id,
+
+              allow: [
+                PermissionFlagsBits.ViewChannel,
+                PermissionFlagsBits.SendMessages,
+                PermissionFlagsBits.ReadMessageHistory
+              ]
+            }
+          ]
+        });
+
+      const embed =
+        new EmbedBuilder()
+          .setColor(
+            "#5865F2"
+          )
+          .setTitle(
+            `🎟️ Ticket Opened: ${
+              interaction.user.username
+            }`
+          )
+          .setDescription(
+            "Please describe your issue below. A staff member will assist you shortly."
+          )
+          .setTimestamp();
+
+      await channel.send({
+        content:
+          `<@${interaction.user.id}>`,
+        embeds: [
+          embed
         ]
       });
 
-      const embed = new EmbedBuilder()
-        .setColor('#5865F2')
-        .setTitle(`🎟️ Ticket Opened: ${interaction.user.username}`)
-        .setDescription('Please describe your issue below. A staff member will assist you shortly.')
-        .setTimestamp();
+      return this.respondToInteraction(
+        interaction,
+        {
+          content:
+            `✅ Support ticket created! Head over to ${channel}.`
+        }
+      );
+    } catch (error) {
+      logger.error(
+        {
+          error:
+            error?.message,
+          stack:
+            error?.stack
+        },
+        "Failed to create ticket channel"
+      );
 
-      await channel.send({ content: `<@${interaction.user.id}>`, embeds: [embed] });
-
-      return this.respondToInteraction(interaction, {
-        content: `✅ Support ticket created! Head over to ${channel}.`
-      });
-    } catch (err) {
-      logger.error({ error: err.message }, 'Failed to create ticket channel');
-      return this.respondToInteraction(interaction, {
-        content: '❌ Failed to create ticket channel. Ensure bot has permission to manage channels.'
-      });
+      return this.respondToInteraction(
+        interaction,
+        {
+          content:
+            "❌ Failed to create ticket channel. Make sure NexusAI has **Manage Channels** permission."
+        }
+      );
     }
   }
 
-  async handleSelectMenuInteraction(interaction) {
-    const { customId, values } = interaction;
-    const selectedValue = values?.[0];
+  // ==========================================================
+  // PLATFORM BUTTON
+  // ==========================================================
 
-    const isV2 =
-  customId === 'platform_select';
-    await this.acknowledgeInteraction(interaction, isV2);
+  async handlePlatformButton(
+    interaction,
+    action
+  ) {
+    const userId =
+      interaction.user.id;
 
-    if (customId === 'platform_select') {
-      if (!selectedValue) {
-        return this.respondToInteraction(interaction, {
-          content: '❌ No platform was selected. Please try again.'
-        });
+    /*
+     * Ensure QueueSystem exists.
+     */
+
+    if (
+      !this.app?.queueSystem
+    ) {
+      try {
+        const {
+          QueueSystem
+        } = await import(
+          "../queue/queueSystem.js"
+        );
+
+        if (
+          this.app
+        ) {
+          this.app.queueSystem =
+            new QueueSystem();
+        }
+      } catch (error) {
+        logger.error(
+          {
+            error:
+              error?.message
+          },
+          "Failed to initialize QueueSystem"
+        );
       }
-      
-      return this.handlePlatformButton(interaction, selectedValue);
     }
 
-    if (customId.startsWith('platform_')) {
-      const action = selectedValue || customId.replace('platform_', '');
-      return this.handlePlatformButton(interaction, action);
-    }
+    const queueSystem =
+      this.app?.queueSystem;
 
-    return this.respondToInteraction(interaction, {
-      content: 'Select menu action not supported yet.'
-    });
-  }
+    switch (
+      action
+    ) {
+      // ======================================================
+      // JOIN QUEUE
+      // ======================================================
 
-  async handlePlatformButton(interaction, action) {
-    const userId = interaction.user.id;
+      case "join_queue":
+        return this.handleJoinQueueButton(
+          interaction
+        );
 
-    if (!this.app?.queueSystem) {
-      const { QueueSystem } = await import('../queue/queueSystem.js');
-      if (this.app) this.app.queueSystem = new QueueSystem();
-    }
-    const queueSystem = this.app?.queueSystem;
-
-    switch (action) {
-      case 'join_queue': {
-        const gifPath = path.join(__dirname, '../../standard.gif');
-        const hasGif = fs.existsSync(gifPath);
-        const files = hasGif ? [new AttachmentBuilder(gifPath, { name: 'standard.gif' })] : [];
-
-        const container = ContainerFactory.buildLearningPlatformContainer(hasGif);
-
-        return this.respondToInteraction(interaction, {
-  components: [
-    container
-  ],
-  files,
-  flags: MessageFlags.IsComponentsV2
-});
-      }
+      // ======================================================
+      // PLATFORM ACCOUNT CONNECTION
+      // ======================================================
 
       case "join_sparxMaths":
       case "join_sparxReader":
@@ -651,468 +2872,2160 @@ export class DiscordBot {
       case "join_languagenut":
       case "join_bedrock":
       case "join_seneca": {
-        const selectedPlatform = action.replace("join_", "");
+        const selectedPlatform =
+          action.replace(
+            "join_",
+            ""
+          );
 
-        if (!queueSystem) {
-          return this.respondToInteraction(interaction, {
-            content: 'Queue system is not available.'
-          });
+        if (
+          !queueSystem
+        ) {
+          return this.respondToInteraction(
+            interaction,
+            {
+              content:
+                "❌ Queue system is unavailable."
+            }
+          );
         }
 
-        const platform = this.getPlatformDefinition(selectedPlatform);
+        const platform =
+          this.getPlatformDefinition(
+            selectedPlatform
+          );
 
-        if (!platform) {
-          return this.respondToInteraction(interaction, {
-            content: '❌ Unknown platform.'
-          });
+        if (
+          !platform
+        ) {
+          return this.respondToInteraction(
+            interaction,
+            {
+              content:
+                "❌ Unknown platform."
+            }
+          );
         }
 
-        this.pendingLogins.set(userId, {
-          platform: platform.key,
-          name: platform.name,
-          createdAt: Date.now()
-        });
-
-        setTimeout(() => {
-          this.pendingLogins.delete(userId);
-        }, 300000);
-
-        const embed = new EmbedBuilder()
-          .setColor("#F4A300")
-          .setTitle(`${platform.emoji ? `${platform.emoji} ` : ''}${platform.name} Login`)
-          .setDescription(
-            "**Login by simply inputting your username and password, logging in with cookies, or choosing one of your saved accounts.**"
-          )
-          .setFooter({ text: "🥭 MangoAI" });
-
-        const row = new ActionRowBuilder().addComponents(
-          new ButtonBuilder()
-            .setCustomId(`login_${selectedPlatform}`)
-            .setLabel("Login")
-            .setEmoji("🔑")
-            .setStyle(ButtonStyle.Primary),
-
-          new ButtonBuilder()
-            .setCustomId(`cookies_${selectedPlatform}`)
-            .setLabel("Login with Cookies")
-            .setEmoji("🍪")
-            .setStyle(ButtonStyle.Secondary),
-
-          new ButtonBuilder()
-            .setCustomId(`saved_${selectedPlatform}`)
-            .setLabel("Saved Accounts")
-            .setEmoji("💾")
-            .setStyle(ButtonStyle.Success)
+        this.pendingLogins.set(
+          userId,
+          {
+            platform:
+              platform.key,
+            name:
+              platform.name,
+            createdAt:
+              Date.now()
+          }
         );
 
-        return this.respondToInteraction(interaction, {
-          embeds: [embed],
-          components: [row]
-        });
+        /*
+         * Automatically expire pending login state.
+         */
+
+        setTimeout(
+          () => {
+            this.pendingLogins.delete(
+              userId
+            );
+          },
+          300000
+        );
+
+        const embed =
+          new EmbedBuilder()
+            .setColor(
+              "#F4A300"
+            )
+            .setTitle(
+              `${
+                platform.emoji
+                  ? `${platform.emoji} `
+                  : ""
+              }${platform.name} • Account Connection`
+            )
+            .setDescription(
+              [
+                "## 🔐 Connect your account",
+                "",
+                "Connect **Sparx Maths** to NexusAI to get started.",
+                "",
+                "╭──────────────────────────────╮",
+                "│ 🔑 **Username & Password**",
+                "│ Sign in with your normal credentials.",
+                "│",
+                "│ 🍪 **Existing Session**",
+                "│ Connect using an authenticated session.",
+                "│",
+                "│ 💾 **Saved Account**",
+                "│ Quickly use an account you've saved.",
+                "╰──────────────────────────────╯",
+                "",
+                "### 🛡️ Account Security",
+                "Your login information is handled privately by NexusAI.",
+                "",
+                "🔒 **Private interaction** • Only you can see this panel."
+              ].join("\n")
+            )
+            .setFooter({
+              text:
+                "🥭 NexusAI • Account Security"
+            })
+            .setTimestamp();
+
+        const row =
+          new ActionRowBuilder()
+            .addComponents(
+              new ButtonBuilder()
+                .setCustomId(
+                  `login_${selectedPlatform}`
+                )
+                .setLabel(
+                  "Sign In"
+                )
+                .setEmoji(
+                  "🔑"
+                )
+                .setStyle(
+                  ButtonStyle.Primary
+                ),
+
+              new ButtonBuilder()
+                .setCustomId(
+                  `cookies_${selectedPlatform}`
+                )
+                .setLabel(
+                  "Session"
+                )
+                .setEmoji(
+                  "🍪"
+                )
+                .setStyle(
+                  ButtonStyle.Secondary
+                ),
+
+              new ButtonBuilder()
+                .setCustomId(
+                  `saved_${selectedPlatform}`
+                )
+                .setLabel(
+                  "Saved Account"
+                )
+                .setEmoji(
+                  "💾"
+                )
+                .setStyle(
+                  ButtonStyle.Success
+                )
+            );
+
+        return this.respondToInteraction(
+          interaction,
+          {
+            embeds: [
+              embed
+            ],
+            components: [
+              row
+            ]
+          }
+        );
       }
 
-      case 'settings': {
-        const settingsEmbed = new EmbedBuilder()
-          .setColor('#5865F2')
-          .setTitle('⚙️ MangoAI Settings')
-          .setDescription('Configure your MangoAI experience:')
-          .addFields(
-            { name: '📋 Saved Accounts', value: 'Configure your platform accounts in the .env file.' },
-            { name: '🔔 Notifications', value: 'Homework updates are sent to this channel.' },
-            { name: '⏰ Auto-Schedule', value: 'Use !schedule create to set up automatic reminders.' }
-          )
-          .setTimestamp()
-          .setFooter({ text: '🥭 MangoAI • Settings' });
+      // ======================================================
+      // SETTINGS
+      // ======================================================
 
-        return this.respondToInteraction(interaction, {
-          embeds: [settingsEmbed]
-        });
+      case "settings": {
+        const embed =
+          new EmbedBuilder()
+            .setColor(
+              "#5865F2"
+            )
+            .setTitle(
+              "⚙️ NexusAI Settings"
+            )
+            .setDescription(
+              "Configure your NexusAI experience:"
+            )
+            .addFields(
+              {
+                name:
+                  "📋 Saved Accounts",
+                value:
+                  "Configure your platform accounts securely."
+              },
+              {
+                name:
+                  "🔔 Notifications",
+                value:
+                  "Homework updates are sent to configured channels."
+              },
+              {
+                name:
+                  "⏰ Auto-Schedule",
+                value:
+                  "Use the scheduler to automate reminders."
+              }
+            )
+            .setTimestamp()
+            .setFooter({
+              text:
+                "🥭 NexusAI • Settings"
+            });
+
+        return this.respondToInteraction(
+          interaction,
+          {
+            embeds: [
+              embed
+            ]
+          }
+        );
       }
 
-      case 'feedback': {
-        const feedbackEmbed = new EmbedBuilder()
-          .setColor('#FFD700')
-          .setTitle('💬 Feedback & Suggestions')
-          .setDescription('We value your feedback! Here\'s how to share:')
-          .addFields(
-            { name: '📝 Create a Ticket', value: 'Use !ticket create feedback <your message>' },
-            { name: '💡 Feature Requests', value: 'Use !ticket create suggestion <your idea>' },
-            { name: '🐛 Report a Bug', value: 'Use !ticket create bug <description>' }
-          )
-          .setTimestamp()
-          .setFooter({ text: '🥭 MangoAI • Your feedback shapes our future' });
+      // ======================================================
+      // FEEDBACK
+      // ======================================================
 
-        return this.respondToInteraction(interaction, {
-          embeds: [feedbackEmbed]
-        });
+      case "feedback": {
+        const embed =
+          new EmbedBuilder()
+            .setColor(
+              "#FFD700"
+            )
+            .setTitle(
+              "💬 Feedback & Suggestions"
+            )
+            .setDescription(
+              "We value your feedback! Here's how to share:"
+            )
+            .addFields(
+              {
+                name:
+                  "📝 Create a Ticket",
+                value:
+                  "`!ticket create feedback <your message>`"
+              },
+              {
+                name:
+                  "💡 Feature Requests",
+                value:
+                  "`!ticket create suggestion <your idea>`"
+              },
+              {
+                name:
+                  "🐛 Report a Bug",
+                value:
+                  "`!ticket create bug <description>`"
+              }
+            )
+            .setFooter({
+              text:
+                "🥭 NexusAI • Your feedback shapes our future"
+            })
+            .setTimestamp();
+
+        return this.respondToInteraction(
+          interaction,
+          {
+            embeds: [
+              embed
+            ]
+          }
+        );
       }
 
-      default: {
-        return this.respondToInteraction(interaction, {
-          content: 'Unknown platform action.'
-        });
-      }
+      default:
+        return this.respondToInteraction(
+          interaction,
+          {
+            content:
+              "❌ Unknown platform action."
+          }
+        );
     }
   }
 
-  getPlatformDefinition(platformKey) {
-    const normalizedKey = String(platformKey || '').trim();
-    if (!normalizedKey) return null;
+  // ==========================================================
+  // SELECT MENU HANDLER
+  // ==========================================================
 
-    if (this.platformService?.getPlatform) {
-      const servicePlatform = this.platformService.getPlatform(normalizedKey);
-      if (servicePlatform) {
-        return servicePlatform;
-      }
+  async handleSelectMenuInteraction(
+    interaction
+  ) {
+    const customId =
+      interaction.customId ?? "";
+
+    const selectedValue =
+      interaction.values?.[0];
+
+    logger.info(
+      {
+        customId,
+        selectedValue,
+        userId:
+          interaction.user?.id
+      },
+      "Select menu interaction received"
+    );
+
+    // ========================================================
+    // LOGIN TYPE
+    // ========================================================
+
+    if (
+      customId.startsWith(
+        "login_type_"
+      )
+    ) {
+      return this.handleLoginTypeSelect(
+        interaction
+      );
     }
 
-    const fallbackMap = {
-      sparxMaths: { name: 'Sparx Maths', key: 'sparxMaths', emoji: '<:SparxMaths:1515672129188790302>' },
-      sparxReader: { name: 'Sparx Reader', key: 'sparxReader', emoji: '<:SparxReader:1515672202375204945>' },
-      sparxScience: { name: 'Sparx Science', key: 'sparxScience', emoji: '<:SparxScience:1515672274051797072>' },
-      languagenut: { name: 'LanguageNut', key: 'languagenut', emoji: '<:LanguageNut:1515672374878670858>' },
-      bedrock: { name: 'Bedrock', key: 'bedrock', emoji: '<:Bedrock:1529265581273124935>' },
-      seneca: { name: 'Seneca', key: 'seneca', emoji: '<:Seneca:1515672492512120963>' }
-    };
+    // ========================================================
+    // PLATFORM SELECT
+    // ========================================================
 
-    return fallbackMap[normalizedKey] || null;
+    await this.acknowledgeInteraction(
+      interaction
+    );
+
+    if (
+      customId ===
+      "platform_select"
+    ) {
+      if (
+        !selectedValue
+      ) {
+        return this.respondToInteraction(
+          interaction,
+          {
+            content:
+              "❌ No platform was selected."
+          }
+        );
+      }
+
+      return this.handlePlatformButton(
+        interaction,
+        selectedValue
+      );
+    }
+
+    // ========================================================
+    // OTHER PLATFORM MENUS
+    // ========================================================
+
+    if (
+      customId.startsWith(
+        "platform_"
+      )
+    ) {
+      const action =
+        selectedValue ??
+        customId.replace(
+          "platform_",
+          ""
+        );
+
+      return this.handlePlatformButton(
+        interaction,
+        action
+      );
+    }
+
+    return this.respondToInteraction(
+      interaction,
+      {
+        content:
+          "❌ Select menu action not supported yet."
+      }
+    );
   }
 
-  async dispatchPlatformLogin(platform, payload) {
-    const normalizedPlatform = String(platform || '').trim();
-    const basePayload = {
-      adapter: 'sparx',
-      action: 'login',
-      platform: normalizedPlatform,
-      ...payload
-    };
+  // ==========================================================
+  // LOGIN TYPE SELECT
+  // ==========================================================
 
-    if (this.platformService?.login) {
-      logger.info({ platform: normalizedPlatform }, 'Dispatching login through PlatformService');
-      return this.platformService.login(normalizedPlatform, basePayload, { source: 'discordBot' });
+  async handleLoginTypeSelect(
+    interaction
+  ) {
+    const parts =
+      interaction.customId.split(
+        "_"
+      );
+
+    const platform =
+      parts
+        .slice(2)
+        .join("_");
+
+    const loginType =
+      interaction.values?.[0];
+
+    if (
+      !loginType
+    ) {
+      return interaction.reply({
+        content:
+          "❌ Please select a login method.",
+        flags:
+          MessageFlags.Ephemeral
+      });
     }
 
-    if (this.app?.engine) {
-      logger.info({ platform: normalizedPlatform }, 'Falling back to sparxLoginBridge dispatch');
-      return dispatchSparxLogin(this.app.engine, basePayload);
+    if (
+      ![
+        "password",
+        "microsoft"
+      ].includes(
+        loginType
+      )
+    ) {
+      return interaction.reply({
+        content:
+          "❌ Invalid login method.",
+        flags:
+          MessageFlags.Ephemeral
+      });
     }
 
-    logger.warn({ platform: normalizedPlatform }, 'No platform service or engine available for login dispatch');
+    return this.openLoginModal(
+      interaction,
+      platform,
+      loginType
+    );
+  }
+
+  // ==========================================================
+  // INTERACTION RESPONSE HELPER
+  // ==========================================================
+
+  async respondToInteraction(
+    interaction,
+    payload
+  ) {
+    try {
+      if (
+        interaction.deferred ||
+        interaction.replied
+      ) {
+        return interaction.editReply(
+          payload
+        );
+      }
+
+      return interaction.reply(
+        payload
+      );
+    } catch (error) {
+      logger.error(
+        {
+          error:
+            error?.message,
+          stack:
+            error?.stack,
+          customId:
+            interaction?.customId
+        },
+        "Failed to respond to interaction"
+      );
+
+      if (
+        interaction.deferred ||
+        interaction.replied
+      ) {
+        return interaction
+          .followUp({
+            content:
+              "❌ Error processing action.",
+            flags:
+              MessageFlags.Ephemeral
+          })
+          .catch(() => {});
+      }
+
+      return null;
+    }
+  }
+
+    // ==========================================================
+  // 3-STEP VERIFICATION SYSTEM
+  // ==========================================================
+
+  async sendVerificationPanel() {
+    const channelId =
+      "1519734400730796252";
+
+    const channel =
+      await this.client.channels
+        .fetch(channelId)
+        .catch(() => null);
+
+    if (!channel) {
+      logger.error(
+        {
+          channelId
+        },
+        "Verification channel could not be found"
+      );
+
+      return null;
+    }
+
+    const embed =
+      new EmbedBuilder()
+        .setColor("#5865F2")
+        .setTitle(
+          "🛡️ NexusAI Verification"
+        )
+        .setDescription(
+          [
+            "Welcome to **NexusAI**.",
+            "",
+            "Before you can access the server, you must complete our **3-step verification process**.",
+            "",
+            "### 🔐 Verification Process",
+            "",
+            "① **Start Verification**",
+            "> Begin the verification process.",
+            "",
+            "② **Security Check**",
+            "> Complete the verification challenge.",
+            "",
+            "③ **Final Confirmation**",
+            "> Confirm that you have completed the verification.",
+            "",
+            "After all three steps are successfully completed, you will receive the verified role.",
+            "",
+            "🔒 **Never share passwords, tokens, or account credentials during verification.**"
+          ].join("\n")
+        )
+        .setFooter({
+          text:
+            "🥭 NexusAI • Secure Verification"
+        })
+        .setTimestamp();
+
+    const row =
+      new ActionRowBuilder()
+        .addComponents(
+          new ButtonBuilder()
+            .setCustomId(
+              "verification_start"
+            )
+            .setLabel(
+              "Start Verification"
+            )
+            .setEmoji(
+              "🔐"
+            )
+            .setStyle(
+              ButtonStyle.Primary
+            )
+        );
+
+    return channel.send({
+      embeds: [
+        embed
+      ],
+      components: [
+        row
+      ]
+    });
+  }
+
+  // ==========================================================
+  // START VERIFICATION
+  // ==========================================================
+
+  async startVerification(
+    interaction
+  ) {
+    const userId =
+      interaction.user.id;
+
+    const state =
+      this.getVerificationState(
+        userId
+      );
+
+    if (
+      state.completed
+    ) {
+      return this.respondToInteraction(
+        interaction,
+        {
+          content:
+            "✅ You are already verified.",
+          flags:
+            MessageFlags.Ephemeral
+        }
+      );
+    }
+
+    state.started = true;
+    state.step = 1;
+
+    return this.respondToInteraction(
+      interaction,
+      {
+        embeds: [
+          new EmbedBuilder()
+            .setColor(
+              "#5865F2"
+            )
+            .setTitle(
+              "🔐 Verification — Step 1/3"
+            )
+            .setDescription(
+              [
+                `Hello **${interaction.user.username}**!`,
+                "",
+                "Your first step is to confirm that you are ready to continue.",
+                "",
+                "Click **Continue** below to proceed to Step 2.",
+                "",
+                "### Progress",
+                "✅ Step 1 started",
+                "⬜ Step 2",
+                "⬜ Step 3"
+              ].join("\n")
+            )
+            .setFooter({
+              text:
+                "NexusAI Verification • 1/3"
+            })
+        ],
+        components: [
+          new ActionRowBuilder()
+            .addComponents(
+              new ButtonBuilder()
+                .setCustomId(
+                  "verification_step1"
+                )
+                .setLabel(
+                  "Continue"
+                )
+                .setEmoji(
+                  "➡️"
+                )
+                .setStyle(
+                  ButtonStyle.Primary
+                )
+            )
+        ],
+        flags:
+          MessageFlags.Ephemeral
+      }
+    );
+  }
+
+  // ==========================================================
+  // VERIFICATION STATE
+  // ==========================================================
+
+  getVerificationState(
+    userId
+  ) {
+    if (
+      !this.verificationStates
+    ) {
+      this.verificationStates =
+        new Map();
+    }
+
+    let state =
+      this.verificationStates.get(
+        userId
+      );
+
+    if (!state) {
+      state = {
+        started:
+          false,
+        step:
+          0,
+        completed:
+          false,
+        startedAt:
+          Date.now()
+      };
+
+      this.verificationStates.set(
+        userId,
+        state
+      );
+    }
+
+    return state;
+  }
+
+  // ==========================================================
+  // VERIFICATION STEP 1
+  // ==========================================================
+
+  async handleVerificationStep1(
+    interaction
+  ) {
+    const state =
+      this.getVerificationState(
+        interaction.user.id
+      );
+
+    if (
+      !state.started
+    ) {
+      return this.respondToInteraction(
+        interaction,
+        {
+          content:
+            "❌ Please start verification first.",
+          flags:
+            MessageFlags.Ephemeral
+        }
+      );
+    }
+
+    state.step = 2;
+
+    return this.respondToInteraction(
+      interaction,
+      {
+        embeds: [
+          new EmbedBuilder()
+            .setColor(
+              "#FAA61A"
+            )
+            .setTitle(
+              "🧩 Verification — Step 2/3"
+            )
+            .setDescription(
+              [
+                "### Security Check",
+                "",
+                "To continue, confirm that you understand the following:",
+                "",
+                "> **NexusAI will never ask you for your Discord password or authentication token.**",
+                "",
+                "Click **I Understand** to continue.",
+                "",
+                "### Progress",
+                "✅ Step 1",
+                "✅ Step 2 started",
+                "⬜ Step 3"
+              ].join("\n")
+            )
+            .setFooter({
+              text:
+                "NexusAI Verification • 2/3"
+            })
+        ],
+        components: [
+          new ActionRowBuilder()
+            .addComponents(
+              new ButtonBuilder()
+                .setCustomId(
+                  "verification_step2"
+                )
+                .setLabel(
+                  "I Understand"
+                )
+                .setEmoji(
+                  "✅"
+                )
+                .setStyle(
+                  ButtonStyle.Success
+                )
+            )
+        ],
+        flags:
+          MessageFlags.Ephemeral
+      }
+    );
+  }
+
+  // ==========================================================
+  // VERIFICATION STEP 2
+  // ==========================================================
+
+  async handleVerificationStep2(
+    interaction
+  ) {
+    const state =
+      this.getVerificationState(
+        interaction.user.id
+      );
+
+    if (
+      !state.started ||
+      state.step < 2
+    ) {
+      return this.respondToInteraction(
+        interaction,
+        {
+          content:
+            "❌ Please complete the verification steps in order.",
+          flags:
+            MessageFlags.Ephemeral
+        }
+      );
+    }
+
+    state.step = 3;
+
+    return this.respondToInteraction(
+      interaction,
+      {
+        embeds: [
+          new EmbedBuilder()
+            .setColor(
+              "#57F287"
+            )
+            .setTitle(
+              "✅ Verification — Step 3/3"
+            )
+            .setDescription(
+              [
+                "You have completed the security check.",
+                "",
+                "Click **Complete Verification** to finish.",
+                "",
+                "### Progress",
+                "✅ Step 1",
+                "✅ Step 2",
+                "✅ Step 3 ready"
+              ].join("\n")
+            )
+            .setFooter({
+              text:
+                "NexusAI Verification • 3/3"
+            })
+        ],
+        components: [
+          new ActionRowBuilder()
+            .addComponents(
+              new ButtonBuilder()
+                .setCustomId(
+                  "verification_step3"
+                )
+                .setLabel(
+                  "Complete Verification"
+                )
+                .setEmoji(
+                  "🛡️"
+                )
+                .setStyle(
+                  ButtonStyle.Success
+                )
+            )
+        ],
+        flags:
+          MessageFlags.Ephemeral
+      }
+    );
+  }
+
+  // ==========================================================
+// VERIFICATION STEP 3
+// ==========================================================
+
+async handleVerificationStep3(interaction) {
+  const userId = interaction.user.id;
+
+  const state = this.getVerificationState(userId);
+
+  if (!state.started || state.step < 3) {
+    return this.respondToInteraction(interaction, {
+      content:
+        "❌ Please complete the verification steps in order.",
+      flags: MessageFlags.Ephemeral
+    });
+  }
+
+  const guild = interaction.guild;
+
+  if (!guild) {
+    return this.respondToInteraction(interaction, {
+      content:
+        "❌ Verification must be completed inside a server.",
+      flags: MessageFlags.Ephemeral
+    });
+  }
+
+  // ========================================================
+  // GET VERIFIED ROLE
+  // ========================================================
+
+  const configuredRoleId =
+    process.env.VERIFICATION_ROLE_ID ||
+    config.discord.verification?.roleId ||
+    "";
+
+  let verifiedRole = null;
+
+  try {
+    // Prefer the explicitly configured role ID.
+    if (configuredRoleId) {
+      verifiedRole = await guild.roles.fetch(
+        configuredRoleId
+      );
+    }
+
+    // Fallback to a role named "Verified".
+    if (!verifiedRole) {
+      verifiedRole =
+        guild.roles.cache.find(
+          role =>
+            role.name.toLowerCase() ===
+            "verified"
+        );
+    }
+
+    // Create the role only if neither exists.
+    if (!verifiedRole) {
+      verifiedRole =
+        await guild.roles.create({
+          name: "Verified",
+          color: "#57F287",
+          reason:
+            "NexusAI verification system"
+        });
+    }
+  } catch (error) {
+    logger.error(
+      {
+        guildId: guild.id,
+        roleId: configuredRoleId,
+        error: error?.message,
+        stack: error?.stack
+      },
+      "Failed to resolve Verified role"
+    );
+
+    return this.respondToInteraction(interaction, {
+      content:
+        "❌ I could not find or create the Verified role. Make sure NexusAI has **Manage Roles** permission.",
+      flags: MessageFlags.Ephemeral
+    });
+  }
+
+  // ========================================================
+  // RESOLVE MEMBER
+  // ========================================================
+
+  let member;
+
+  try {
+    member =
+      await guild.members.fetch(userId);
+  } catch (error) {
+    logger.error(
+      {
+        guildId: guild.id,
+        userId,
+        error: error?.message
+      },
+      "Failed to fetch member for verification"
+    );
+
+    return this.respondToInteraction(interaction, {
+      content:
+        "❌ I could not find your server membership.",
+      flags: MessageFlags.Ephemeral
+    });
+  }
+
+  // ========================================================
+  // ASSIGN VERIFIED ROLE
+  // ========================================================
+
+  try {
+    logger.info(
+      {
+        guildId: guild.id,
+        userId,
+        roleId: verifiedRole.id,
+        roleName: verifiedRole.name
+      },
+      "Assigning Verified role"
+    );
+
+    await member.roles.add(
+      verifiedRole,
+      "NexusAI 3-step verification completed"
+    );
+
+    logger.info(
+      {
+        guildId: guild.id,
+        userId,
+        roleId: verifiedRole.id
+      },
+      "✅ Verified role assigned successfully"
+    );
+  } catch (error) {
+    logger.error(
+      {
+        guildId: guild.id,
+        userId,
+        roleId: verifiedRole?.id,
+        error: error?.message,
+        stack: error?.stack
+      },
+      "Failed to assign Verified role"
+    );
+
+    return this.respondToInteraction(interaction, {
+      content:
+        "❌ Verification was completed, but I could not assign your Verified role. Make sure NexusAI has **Manage Roles** permission and that its highest role is above the Verified role.",
+      flags: MessageFlags.Ephemeral
+    });
+  }
+
+  // ========================================================
+  // MARK VERIFICATION COMPLETE
+  // ========================================================
+
+  state.completed = true;
+  state.step = 3;
+  state.completedAt = Date.now();
+
+  this.verificationStates.set(
+    userId,
+    state
+  );
+
+  logger.info(
+    {
+      guildId: guild.id,
+      userId,
+      username:
+        interaction.user.username
+    },
+    "✅ User completed 3-step verification"
+  );
+
+  // ========================================================
+  // SUCCESS RESPONSE
+  // ========================================================
+
+  return this.respondToInteraction(interaction, {
+    embeds: [
+      new EmbedBuilder()
+        .setColor("#57F287")
+        .setTitle(
+          "🛡️ Verification Complete"
+        )
+        .setDescription(
+          [
+            `✅ **${interaction.user.username}** has been successfully verified.`,
+            "",
+            "You now have access to the verified areas of the server.",
+            "",
+            "Welcome to **NexusAI**! 🥭"
+          ].join("\n")
+        )
+        .setFooter({
+          text:
+            "NexusAI • Verification Complete"
+        })
+        .setTimestamp()
+    ],
+    components: [],
+    flags: MessageFlags.Ephemeral
+  });
+}
+
+  // ==========================================================
+  // LOGIN MODAL
+  // ==========================================================
+
+  async handleLoginModal(
+    interaction
+  ) {
+    await interaction.deferReply({
+      flags:
+        MessageFlags.Ephemeral
+    });
+
+    try {
+      const parts =
+        interaction.customId.split(
+          "_"
+        );
+
+      const platform =
+        parts
+          .slice(2, -1)
+          .join("_");
+
+      const loginType =
+        parts[
+          parts.length - 1
+        ];
+
+      const school =
+        interaction.fields.getTextInputValue(
+          "school"
+        );
+
+      const password =
+        interaction.fields.getTextInputValue(
+          "password"
+        );
+
+      const username =
+        loginType ===
+        "microsoft"
+          ? null
+          : interaction.fields.getTextInputValue(
+              "username"
+            );
+
+      const email =
+        loginType ===
+        "microsoft"
+          ? interaction.fields.getTextInputValue(
+              "email"
+            )
+          : null;
+
+      if (
+        !this.loginService ||
+        typeof this
+          .loginService
+          .dispatchPlatformLogin !==
+          "function"
+      ) {
+        throw new Error(
+          "Login service is unavailable."
+        );
+      }
+
+      await this.loginService.dispatchPlatformLogin(
+        platform,
+        {
+          adapter:
+            "sparx",
+          action:
+            "login",
+          platform,
+          school,
+          method:
+            loginType ===
+            "microsoft"
+              ? "microsoft"
+              : "password",
+          username,
+          email,
+          password
+        }
+      );
+
+      return interaction.editReply({
+        content:
+          [
+            "✅ **Login request submitted successfully!**",
+            "",
+            `**Platform:** ${platform}`,
+            `**Login Type:** ${
+              loginType === "microsoft"
+                ? "Microsoft"
+                : "Normal Sparx"
+            }`,
+            `**School:** ${school}`,
+            loginType ===
+            "microsoft"
+              ? `**Email:** ${email}`
+              : `**Username:** ${username}`,
+            "",
+            "🔒 Your credentials were submitted through the private interaction."
+          ].join("\n")
+      });
+    } catch (error) {
+      logger.error(
+        {
+          error:
+            error?.message,
+          stack:
+            error?.stack
+        },
+        "Failed to dispatch login"
+      );
+
+      return interaction.editReply({
+        content:
+          `❌ Failed to submit login request: ${
+            error?.message ??
+            "Unknown error"
+          }`
+      });
+    }
+  }
+
+  // ==========================================================
+  // COOKIE LOGIN MODAL
+  // ==========================================================
+
+  async handleCookieModalSubmit(
+    interaction
+  ) {
+    if (
+      this.loginService &&
+      typeof this
+        .loginService
+        .handleCookieModal ===
+      "function"
+    ) {
+      return this.loginService.handleCookieModal(
+        interaction
+      );
+    }
+
+    const platform =
+      interaction.customId.replace(
+        "cookie_login_",
+        ""
+      );
+
+    return interaction.reply({
+      content:
+        `🍪 Cookie session received for **${platform}**.`,
+      flags:
+        MessageFlags.Ephemeral
+    });
+  }
+
+  // ==========================================================
+  // SAVED ACCOUNTS
+  // ==========================================================
+
+  async handleSavedAccounts(
+    interaction,
+    platform
+  ) {
+    if (
+      this.loginService &&
+      typeof this
+        .loginService
+        .handleSavedAccounts ===
+      "function"
+    ) {
+      return this.loginService.handleSavedAccounts(
+        interaction,
+        platform
+      );
+    }
+
+    return interaction.reply({
+      content:
+        `💾 No saved-account service is currently available for **${platform}**.`,
+      flags:
+        MessageFlags.Ephemeral
+    });
+  }
+
+  // ==========================================================
+  // COMMANDS
+  // ==========================================================
+
+  async handleCommand(
+    command,
+    args,
+    message
+  ) {
+    logger.info(
+      {
+        command,
+        author:
+          message.author.username
+      },
+      "Command received"
+    );
+
+    if (
+      this.commandHandler &&
+      this.commandHandler.commands.has(
+        command
+      )
+    ) {
+      return this.commandHandler
+        .commands
+        .get(command)(
+          message,
+          args
+        );
+    }
+
+    switch (
+      command
+    ) {
+      case "help":
+        return this.handleHelp(
+          message
+        );
+
+      case "solve":
+        return this.handleSolve(
+          message,
+          args
+        );
+
+      case "status":
+        return this.handleStatus(
+          message
+        );
+
+      case "ping":
+        return this.replyToChannel(
+          message,
+          `🏓 Pong! ${this.client.ws.ping}ms`
+        );
+
+      case "verify":
+        return this.handleVerifyCommand(
+          message
+        );
+
+      default:
+        return this.replyToChannel(
+          message,
+          "❓ Unknown command. Use `!help`"
+        );
+    }
+  }
+
+  // ==========================================================
+  // VERIFY COMMAND
+  // ==========================================================
+
+  async handleVerifyCommand(
+    message
+  ) {
+    const state =
+      this.getVerificationState(
+        message.author.id
+      );
+
+    if (
+      state.completed
+    ) {
+      return this.replyToChannel(
+        message,
+        {
+          content:
+            "✅ You are already verified."
+        }
+      );
+    }
+
+    return this.replyToChannel(
+      message,
+      {
+        content:
+          "🔐 Please use the verification panel in the verification channel to begin."
+      }
+    );
+  }
+
+  // ==========================================================
+  // HELP
+  // ==========================================================
+
+  async handleHelp(
+    message
+  ) {
+    const embed =
+      new EmbedBuilder()
+        .setColor(
+          "#0099FF"
+        )
+        .setTitle(
+          "📚 NexusAI Commands"
+        )
+        .addFields(
+          {
+            name:
+              "Homework",
+            value:
+              "`!homework` - View homework progress\n" +
+              "`!tasks` - View tasks"
+          },
+          {
+            name:
+              "Premium",
+            value:
+              "`!premium` - View premium information\n" +
+              "`!trial claim` - Start a trial"
+          },
+          {
+            name:
+              "Queue",
+            value:
+              "`!queue` - View queue status\n" +
+              "`!join [platform]` - Join a queue"
+          },
+          {
+            name:
+              "Verification",
+            value:
+              "`!verify` - Check verification status"
+          },
+          {
+            name:
+              "Scheduler",
+            value:
+              "`!schedule` - Manage schedules"
+          },
+          {
+            name:
+              "General",
+            value:
+              "`!status` - Bot status\n" +
+              "`!ping` - Check latency"
+          }
+        )
+        .setTimestamp();
+
+    return this.replyToChannel(
+      message,
+      {
+        embeds: [
+          embed
+        ]
+      }
+    );
+  }
+
+  // ==========================================================
+  // SOLVE COMMAND
+  // ==========================================================
+
+  async handleSolve(
+    message,
+    args
+  ) {
+    if (
+      args.length < 2
+    ) {
+      return this.replyToChannel(
+        message,
+        "❌ Usage: `!solve <platform> <question>`"
+      );
+    }
+
+    const platform =
+      args[0].toLowerCase();
+
+    const question =
+      args
+        .slice(1)
+        .join(" ");
+
+    return this.replyToChannel(
+      message,
+      `🔄 Processing your request for **${platform}**...\nQuestion: ${question}`
+    );
+  }
+
+  // ==========================================================
+  // STATUS
+  // ==========================================================
+
+  async handleStatus(
+    message
+  ) {
+    const guildSession =
+      message.guild
+        ? this.activeSessions.get(
+            message.guild.id
+          )
+        : null;
+
+    const embed =
+      new EmbedBuilder()
+        .setColor(
+          "#00FF00"
+        )
+        .setTitle(
+          "✅ NexusAI Status"
+        )
+        .addFields(
+          {
+            name:
+              "Status",
+            value:
+              "Online",
+            inline:
+              true
+          },
+          {
+            name:
+              "Ping",
+            value:
+              `${this.client.ws.ping}ms`,
+            inline:
+              true
+          },
+          {
+            name:
+              "Uptime",
+            value:
+              this.formatUptime(
+                this.client.uptime
+              ),
+            inline:
+              true
+          },
+          {
+            name:
+              "Version",
+            value:
+              "2.0.0",
+            inline:
+              true
+          },
+          {
+            name:
+              "Auto Channels",
+            value:
+              guildSession
+                ? "Enabled"
+                : "Disabled",
+            inline:
+              true
+          }
+        )
+        .setTimestamp();
+
+    return this.replyToChannel(
+      message,
+      {
+        embeds: [
+          embed
+        ]
+      }
+    );
+  }
+
+  // ==========================================================
+  // SESSION HELPERS
+  // ==========================================================
+
+  async ensureGuildSession(
+    message
+  ) {
     return null;
   }
 
-  async respondToInteraction(interaction, payload) {
-  try {
+  isSessionChannel(
+    channelId,
+    guildSession
+  ) {
+    const session =
+      guildSession ||
+      (
+        this.activeSessions.size
+          ? Array.from(
+              this.activeSessions.values()
+            ).find(
+              session =>
+                Object.values(
+                  session.channelIds ||
+                    {}
+                ).includes(
+                  channelId
+                )
+            )
+          : null
+      );
 
-    if (interaction.deferred || interaction.replied) {
-      return await interaction.editReply(payload);
+    if (
+      !session
+    ) {
+      return false;
     }
 
-    return await interaction.reply(payload);
-
-  } catch (error) {
-
-    logger.error(
-      { 
-        error: error.message,
-        customId: interaction.customId
-      },
-      'Failed to respond to interaction'
+    return Object.values(
+      session.channelIds ||
+        {}
+    ).includes(
+      channelId
     );
+  }
 
-    if (interaction.deferred || interaction.replied) {
-      return interaction.followUp({
-        content: '❌ Error processing action.',
-        flags: MessageFlags.Ephemeral
-      }).catch(() => {});
+  async replyToChannel(
+    message,
+    payload
+  ) {
+    const guildSession =
+      message.guild
+        ? this.activeSessions.get(
+            message.guild.id
+          )
+        : null;
+
+    if (
+      guildSession &&
+      !this.isSessionChannel(
+        message.channel.id,
+        guildSession
+      )
+    ) {
+      return this.routeReply(
+        message,
+        payload,
+        guildSession
+      );
+    }
+
+    return message.channel.send(
+      payload
+    );
+  }
+
+  async routeReply(
+    message,
+    payload,
+    guildSession
+  ) {
+    const session =
+      guildSession ||
+      null;
+
+    if (
+      !session
+    ) {
+      return message.channel.send(
+        payload
+      );
+    }
+
+    const mainChannel =
+      message.guild?.channels.cache.get(
+        session.mainChannelId
+      );
+
+    if (
+      mainChannel
+    ) {
+      return mainChannel.send(
+        payload
+      );
+    }
+
+    return message.channel.send(
+      payload
+    );
+  }
+
+  // ==========================================================
+  // CHANNEL HELPERS
+  // ==========================================================
+
+  async getChannelByConfigKey(
+    key
+  ) {
+    const channelId =
+      config.discord.channels?.[
+        key
+      ];
+
+    if (
+      !channelId
+    ) {
+      return null;
+    }
+
+    let channel =
+      this.client.channels.cache.get(
+        channelId
+      );
+
+    if (
+      !channel
+    ) {
+      channel =
+        await this.client.channels
+          .fetch(channelId)
+          .catch(
+            () => null
+          );
+    }
+
+    return channel;
+  }
+
+  async sendToConfiguredChannel(
+    key,
+    payload,
+    fallbackChannel = null
+  ) {
+    const channel =
+      await this.getChannelByConfigKey(
+        key
+      );
+
+    if (
+      channel
+    ) {
+      logger.info(
+        {
+          channelKey:
+            key,
+          channelId:
+            channel.id
+        },
+        "Sending message to configured Discord channel"
+      );
+
+      return channel.send(
+        payload
+      );
+    }
+
+    if (
+      fallbackChannel
+    ) {
+      return fallbackChannel.send(
+        payload
+      );
+    }
+
+    return null;
+  }
+
+  // ==========================================================
+  // INTERACTION ACKNOWLEDGEMENT
+  // ==========================================================
+
+  async acknowledgeInteraction(
+    interaction
+  ) {
+    if (
+      interaction.deferred ||
+      interaction.replied
+    ) {
+      return;
+    }
+
+    try {
+      await interaction.deferReply({
+        flags:
+          MessageFlags.Ephemeral
+      });
+    } catch (error) {
+      logger.debug(
+        {
+          error:
+            error?.message
+        },
+        "Interaction acknowledgement failed"
+      );
     }
   }
-}
+
+  // ==========================================================
+  // PRESENCE
+  // ==========================================================
+
+  setPresence() {
+    const activities = [
+      {
+        name:
+          "📚 Homework Solutions",
+        type:
+          ActivityType.Watching
+      },
+      {
+        name:
+          "📈 Your Progress",
+        type:
+          ActivityType.Watching
+      },
+      {
+        name:
+          "✨ Students Learning",
+        type:
+          ActivityType.Watching
+      },
+      {
+        name:
+          "🧠 AI Tutoring",
+        type:
+          ActivityType.Watching
+      },
+      {
+        name:
+          "🥭 NexusAI 🎓",
+        type:
+          ActivityType.Playing
+      },
+      {
+        name:
+          "🤖 Smart Learning",
+        type:
+          ActivityType.Playing
+      },
+      {
+        name:
+          "⚡ Solving Problems",
+        type:
+          ActivityType.Playing
+      },
+      {
+        name:
+          "🎯 Education Magic",
+        type:
+          ActivityType.Playing
+      }
+    ];
+
+    if (
+      this.presenceInterval
+    ) {
+      clearInterval(
+        this.presenceInterval
+      );
+    }
+
+    const updatePresence =
+      () => {
+        try {
+          const activity =
+            activities[
+              Math.floor(
+                Math.random() *
+                  activities.length
+              )
+            ];
+
+          this.client.user?.setPresence({
+            activities: [
+              activity
+            ],
+            status:
+              "online"
+          });
+
+          logger.info(
+            {
+              activity:
+                activity.name,
+              type:
+                activity.type
+            },
+            "🎭 Bot presence updated"
+          );
+        } catch (error) {
+          logger.error(
+            {
+              error:
+                error?.message
+            },
+            "Failed to update presence"
+          );
+        }
+      };
+
+    updatePresence();
+
+    this.presenceInterval =
+      setInterval(
+        updatePresence,
+        30000
+      );
+  }
+
+  // ==========================================================
+  // SCHEDULE LOOP
+  // ==========================================================
 
   async startScheduleLoop() {
-    if (this.scheduleLoop) return;
+    if (
+      this.scheduleLoop
+    ) {
+      return;
+    }
 
-    this.scheduleLoop = setInterval(async () => {
-      if (!this.app?.scheduleManager) return;
+    this.scheduleLoop =
+      setInterval(
+        async () => {
+          try {
+            if (
+              !this.app?.scheduleManager
+            ) {
+              return;
+            }
 
-      const schedules = this.app.scheduleManager.getSchedulesToRun();
-      if (!schedules.length) return;
+            const schedules =
+              this.app.scheduleManager.getSchedulesToRun();
 
-      for (const schedule of schedules) {
-        const channel = await this.getChannelByConfigKey('autoSchedule');
-        if (!channel) continue;
+            if (
+              !schedules?.length
+            ) {
+              return;
+            }
 
-        const embed = new EmbedBuilder()
-          .setColor('#5865F2')
-          .setTitle('📅 Auto Schedule Triggered')
-          .setDescription(`Your scheduled homework job is ready for **${schedule.platform}**.`)
-          .addFields(
-            { name: 'Schedule', value: schedule.name, inline: true },
-            { name: 'Platform', value: schedule.platform, inline: true },
-            { name: 'Next Run', value: schedule.nextRun ? schedule.nextRun.toLocaleString() : 'N/A', inline: false }
-          )
-          .setTimestamp();
+            for (
+              const schedule of
+                schedules
+            ) {
+              const channel =
+                await this.getChannelByConfigKey(
+                  "autoSchedule"
+                );
 
-        await channel.send({ embeds: [embed] }).catch(() => null);
+              if (
+                !channel
+              ) {
+                continue;
+              }
 
-        this.app.scheduleManager.markAsRun(schedule.id);
-      }
-    }, 30000);
+              const embed =
+                new EmbedBuilder()
+                  .setColor(
+                    "#5865F2"
+                  )
+                  .setTitle(
+                    "📅 Auto Schedule Triggered"
+                  )
+                  .setDescription(
+                    `Your scheduled homework job is ready for **${schedule.platform}**.`
+                  )
+                  .addFields(
+                    {
+                      name:
+                        "Schedule",
+                      value:
+                        String(
+                          schedule.name ??
+                            "Unnamed"
+                        ),
+                      inline:
+                        true
+                    },
+                    {
+                      name:
+                        "Platform",
+                      value:
+                        String(
+                          schedule.platform ??
+                            "Unknown"
+                        ),
+                      inline:
+                        true
+                    },
+                    {
+                      name:
+                        "Next Run",
+                      value:
+                        schedule.nextRun
+                          ? schedule.nextRun.toLocaleString()
+                          : "N/A",
+                      inline:
+                        false
+                    }
+                  )
+                  .setTimestamp();
+
+              await channel
+                .send({
+                  embeds: [
+                    embed
+                  ]
+                })
+                .catch(
+                  () => null
+                );
+
+              this.app.scheduleManager.markAsRun(
+                schedule.id
+              );
+            }
+          } catch (error) {
+            logger.error(
+              {
+                error:
+                  error?.message
+              },
+              "Schedule loop failed"
+            );
+          }
+        },
+        30000
+      );
   }
 
   stopScheduleLoop() {
-    if (this.scheduleLoop) {
-      clearInterval(this.scheduleLoop);
-      this.scheduleLoop = null;
+    if (
+      this.scheduleLoop
+    ) {
+      clearInterval(
+        this.scheduleLoop
+      );
+
+      this.scheduleLoop =
+        null;
     }
   }
 
-  async replyToChannel(message, payload) {
-    const guildSession = message.guild
-      ? this.activeSessions.get(message.guild.id)
-      : null;
-
-    if (guildSession && !this.isSessionChannel(message.channel.id, guildSession)) {
-      return this.routeReply(message, payload, guildSession);
-    }
-
-    return message.channel.send(payload);
-  }
-
-  async routeReply(message, payload, guildSession) {
-    const session = guildSession || (
-      message.guild ? this.activeSessions.get(message.guild.id) : null
-    );
-
-    if (!session) {
-      return message.channel.send(payload);
-    }
-
-    const mainChannel = message.guild.channels.cache.get(session.mainChannelId);
-
-    if (mainChannel) {
-      return mainChannel.send(payload);
-    }
-
-    return message.channel.send(payload);
-  }
-
-  isSessionChannel(channelId, guildSession) {
-    const session = guildSession || (
-      this.activeSessions.size
-        ? Array.from(this.activeSessions.values()).find(s =>
-            Object.values(s.channelIds || {}).includes(channelId)
-          )
-        : null
-    );
-
-    if (!session) return false;
-
-    return Object.values(session.channelIds || {}).includes(channelId);
-  }
-
-  formatUptime(ms) {
-    if (!ms) return 'N/A';
-
-    const seconds = Math.floor(ms / 1000) % 60;
-    const minutes = Math.floor(ms / (1000 * 60)) % 60;
-    const hours = Math.floor(ms / (1000 * 60 * 60)) % 24;
-
-    return `${hours}h ${minutes}m ${seconds}s`;
-  }
+  // ==========================================================
+  // LOGIN
+  // ==========================================================
 
   async login() {
     try {
-      await this.client.login(config.discord.token);
-      logger.info('Discord bot logged in successfully');
+      await this.client.login(
+        config.discord.token
+      );
+
+      logger.info(
+        "Discord bot logged in successfully"
+      );
+
       this.startScheduleLoop();
     } catch (error) {
-      logger.error({ error: error.message }, 'Failed to login to Discord');
+      logger.error(
+        {
+          error:
+            error?.message
+        },
+        "Failed to login to Discord"
+      );
+
       throw error;
     }
   }
 
-  setPresence() {
-    const activities = [
-      { name: '📚 Homework Solutions', type: ActivityType.Watching },
-      { name: '📈 Your Progress', type: ActivityType.Watching },
-      { name: '✨ Students Learning', type: ActivityType.Watching },
-      { name: '🧠 AI Tutoring', type: ActivityType.Watching },
-      { name: '🥭 MangoAI 🎓', type: ActivityType.Playing },
-      { name: '🤖 Smart Learning', type: ActivityType.Playing },
-      { name: '⚡ Solving Problems', type: ActivityType.Playing },
-      { name: '🎯 Education Magic', type: ActivityType.Playing }
-    ];
+  // ==========================================================
+  // STARTUP VERIFICATION PANEL
+  // ==========================================================
 
-    if (this.presenceInterval) clearInterval(this.presenceInterval);
-
-    const updatePresence = () => {
-      try {
-        const activity = activities[Math.floor(Math.random() * activities.length)];
-
-        this.client.user.setPresence({
-          activities: [activity],
-          status: 'online'
-        });
-
-        logger.info({ activity: activity.name, type: activity.type }, '🎭 Bot presence updated');
-      } catch (error) {
-        logger.error({ error: error.message }, '❌ Failed to update presence');
-      }
-    };
-
-    updatePresence();
-    this.presenceInterval = setInterval(updatePresence, 30000);
-  }
-
-  async clearChannelMessages(channelKey) {
-    const channel = await this.getChannelByConfigKey(channelKey);
-    if (!channel) return;
-
+  async sendStartupVerificationPanel() {
     try {
-      let deletedCount = 0;
+      const channelId =
+        "1519734400730796252";
 
-      while (true) {
-        const messages = await channel.messages.fetch({ limit: 100 });
-        if (messages.size === 0) break;
+      const channel =
+        await this.client.channels
+          .fetch(channelId)
+          .catch(
+            () => null
+          );
 
-        const fourteenDaysAgo = Date.now() - 1209600000;
-
-        const youngMessages = messages.filter(
-          msg => msg.createdTimestamp > fourteenDaysAgo
-        );
-        const oldMessages = messages.filter(
-          msg => msg.createdTimestamp <= fourteenDaysAgo
-        );
-
-        if (youngMessages.size > 0) {
-          const deletedBatch = await channel.bulkDelete(youngMessages, true);
-          deletedCount += deletedBatch.size;
-        }
-
-        if (oldMessages.size > 0) {
-          for (const msg of oldMessages.values()) {
-            await msg.delete().catch(() => {});
-            deletedCount++;
-            await new Promise(resolve => setTimeout(resolve, 500));
-          }
-        }
-
-        if (youngMessages.size === 0 && oldMessages.size === 0) break;
-      }
-
-      if (deletedCount > 0) {
-        logger.info(
-          { channel: channelKey, messagesDeleted: deletedCount },
-          '🗑️ Cleared channel'
-        );
-      }
-    } catch (error) {
-      logger.warn(
-        { channel: channelKey, error: error.message },
-        'Failed to clear channel'
-      );
-    }
-  }
-
-  async sendStartupMessages() {
-  try {
-    const channels = config.discord.channels;
-
-    logger.info('🗑️ Clearing all channels before refresh...');
-
-    // Clear channels
-    if (channels.learningPlatform) {
-      await this.clearChannelMessages('learningPlatform');
-    }
-
-    if (channels.autoSchedule) {
-      await this.clearChannelMessages('autoSchedule');
-    }
-
-    if (channels.supportTickets) {
-      await this.clearChannelMessages('supportTickets');
-    }
-
-
-    /*
-    ==================================
-    LEARNING PLATFORM CHANNEL
-    ==================================
-    */
-
-    if (channels.learningPlatform) {
-
-      const gifPath = path.join(__dirname, '../../standard.gif');
-      const hasGif = fs.existsSync(gifPath);
-      
-      const container =
-  ContainerFactory.buildLearningPlatformContainer(hasGif);
-
-const payload = {
-  components: [container],
-  flags: MessageFlags.IsComponentsV2
-};
-
-if (hasGif) {
-  payload.files = [
-    new AttachmentBuilder(gifPath, {
-      name: 'standard.gif'
-    })
-  ];
-}
-
-      await this.sendToConfiguredChannel(
-        'learningPlatform',
-        payload
-      ).catch(err =>
+      if (
+        !channel
+      ) {
         logger.warn(
           {
-            channel: 'learningPlatform',
-            error: err.message
+            channelId
           },
-          'Failed to send learning platform message'
-        )
+          "Verification channel not found"
+        );
+
+        return;
+      }
+
+      const messages =
+        await channel.messages.fetch({
+          limit:
+            100
+        });
+
+      const existing =
+        messages.find(
+          message =>
+            message.author?.id ===
+              this.client.user?.id &&
+            message.components?.some(
+              row =>
+                row.components?.some(
+                  component =>
+                    component.customId ===
+                    "verification_start"
+                )
+            )
+        );
+
+      if (
+        existing
+      ) {
+        return;
+      }
+
+      await this.sendVerificationPanel();
+
+      logger.info(
+        {
+          channelId
+        },
+        "✅ Verification panel sent"
+      );
+    } catch (error) {
+      logger.error(
+        {
+          error:
+            error?.message,
+          stack:
+            error?.stack
+        },
+        "Failed to send verification panel"
       );
     }
-
-    logger.info('✅ All channels refreshed and ready!');
-
-
-  } catch (error) {
-
-    logger.error(
-      {
-        error: error.message
-      },
-      'Error sending startup messages'
-    );
-
   }
-}
 
-  async openCookieModal(interaction, platform) {
-    const modal = new ModalBuilder()
-      .setCustomId(`cookie_login_${platform}`)
-      .setTitle(`Login with Cookies: ${platform}`);
-
-    const cookiesInput = new TextInputBuilder()
-      .setCustomId("cookies_input")
-      .setLabel("Session Cookies JSON / Header")
-      .setStyle(TextInputStyle.Paragraph)
-      .setPlaceholder("Paste session cookies here...")
-      .setRequired(true);
-
-    modal.addComponents(new ActionRowBuilder().addComponents(cookiesInput));
-    await interaction.showModal(modal);
-  }
+  // ==========================================================
+  // CLOSE
+  // ==========================================================
 
   async close() {
     try {
-      await this.client.destroy();
-      logger.info("Discord bot disconnected");
+      this.stopScheduleLoop();
+
+      if (
+        this.presenceInterval
+      ) {
+        clearInterval(
+          this.presenceInterval
+        );
+
+        this.presenceInterval =
+          null;
+      }
+
+      if (
+        this.verificationStates
+      ) {
+        this.verificationStates.clear();
+      }
+
+      if (
+        this.pendingLogins
+      ) {
+        this.pendingLogins.clear();
+      }
+
+      if (
+        this.client
+      ) {
+        await this.client.destroy();
+      }
+
+      logger.info(
+        "Discord bot disconnected"
+      );
     } catch (error) {
-      logger.error({ error: error.message }, "Error closing Discord bot");
+      logger.error(
+        {
+          error:
+            error?.message
+        },
+        "Error closing Discord bot"
+      );
     }
   }
 }

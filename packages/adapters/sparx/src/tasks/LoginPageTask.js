@@ -1,4 +1,4 @@
-export class LoginPageTask {
+﻿export class LoginPageTask {
   constructor(client) {
     this.client = client;
   }
@@ -9,3 +9,4 @@ export class LoginPageTask {
 }
 
 export default LoginPageTask;
+

@@ -1,89 +1,169 @@
-export class LoginTask {
-  constructor(client) {
+﻿export class LoginTask {
+  constructor(client, sessionManager) {
     this.client = client;
+    this.sessionManager = sessionManager;
   }
 
-  async execute(taskPayload = {}) {
+  async execute(taskPayload = {}, context = {}) {
     const {
       school,
+      email,
       username,
       password,
       method = "password"
     } = taskPayload;
 
-    if (!school) {
-      return {
-        success: false,
-        error: "School name was not provided"
-      };
-    }
-
     try {
-      await this.client.gotoLogin();
+      // --------------------------------------------------------
+      // 1. Check whether the saved browser session is already
+      //    authenticated.
+      // --------------------------------------------------------
 
-      await this.client.searchSchool(
-        school
-      );
+      console.log("[Sparx] Checking existing session...");
 
-      await this.client.selectSchool(
-        school
-      );
+      const alreadyLoggedIn =
+        await this.client.isLoggedIn();
 
+      if (alreadyLoggedIn) {
+        console.log(
+          "[Sparx] Existing saved session is authenticated."
+        );
 
-      // Microsoft login
-      if (method === "microsoft") {
-
-        await this.client.loginWithMicrosoft();
+        if (context.reportProgress) {
+          await context.reportProgress(
+            100,
+            "Existing Sparx session is already authenticated"
+          );
+        }
 
         return {
           success: true,
-          method: "microsoft",
-          message: "Microsoft login opened"
+          loggedIn: true,
+          method: "saved-session",
+          url: await this.client.getCurrentUrl?.()
         };
       }
 
+      // --------------------------------------------------------
+      // 2. No authenticated session exists.
+      // --------------------------------------------------------
 
-      // Normal login
-      if (!username) {
+      if (!school) {
         return {
           success: false,
-          error: "Username was not provided"
+          loggedIn: false,
+          error: "School name was not provided"
         };
       }
 
-      if (!password) {
+      if (context.reportProgress) {
+        await context.reportProgress(
+          20,
+          "Opening Sparx login page"
+        );
+      }
+
+      await this.client.gotoLogin();
+
+      // --------------------------------------------------------
+      // 3. Select school.
+      // --------------------------------------------------------
+
+      if (context.reportProgress) {
+        await context.reportProgress(
+          40,
+          "Selecting school"
+        );
+      }
+
+      await this.client.searchSchool(school);
+
+      const schoolResult =
+        await this.client.selectSchool(school);
+
+      if (schoolResult && !schoolResult.success) {
         return {
           success: false,
-          error: "Password was not provided"
+          loggedIn: false,
+          stage: "school-selection",
+          ...schoolResult
         };
       }
 
+      // --------------------------------------------------------
+      // 4. Microsoft authentication.
+      // --------------------------------------------------------
 
-      await this.client.enterUsername(
-        username
-      );
+      if (method === "microsoft") {
+        if (context.reportProgress) {
+          await context.reportProgress(
+            60,
+            "Opening Microsoft login"
+          );
+        }
 
-      await this.client.enterPassword(
-        password
-      );
+        const result =
+          await this.client.loginWithMicrosoft({
+            email
+          });
 
-      await this.client.submitLogin();
+        if (result?.success || result?.loggedIn) {
+          await this.sessionManager.saveSession();
 
+          if (context.reportProgress) {
+            await context.reportProgress(
+              100,
+              "Sparx authentication complete"
+            );
+          }
+        }
 
-      const loggedIn =
-        await this.client.isLoggedIn();
+        return result;
+      }
 
+      if (method === "password") {
+        if (!username || !password) {
+          return {
+            success: false,
+            loggedIn: false,
+            method,
+            error: "Username and password are required."
+          };
+        }
 
-      return {
-        success: loggedIn,
-        loggedIn,
-        method: "password"
-      };
+        await this.client.enterUsername(username);
+        await this.client.enterPassword(password);
+        await this.client.submitLogin();
 
+        const loggedIn = await this.client.isLoggedIn();
 
-    } catch (error) {
+        if (loggedIn) {
+          await this.sessionManager?.saveSession?.();
+        }
+
+        return {
+          success: loggedIn,
+          loggedIn,
+          method
+        };
+      }
+
       return {
         success: false,
+        loggedIn: false,
+        method,
+        error: `Unsupported login method: ${method}`
+      };
+
+    } catch (error) {
+      console.error(
+        "[Sparx] Login error:",
+        error
+      );
+
+      return {
+        success: false,
+        loggedIn: false,
         error: error.message
       };
     }

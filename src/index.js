@@ -19,6 +19,7 @@ import QueueSystem from './queue/queueSystem.js';
 import SupportManager from './session/supportManager.js';
 import CommandHandler from './bot/commandHandler.js';
 import PlatformService from './services/PlatformService.js';
+import LoginService from './services/LoginService.js';
 
 /**
  * Main Application Class
@@ -38,6 +39,7 @@ class UltimateAutoCompleter {
     this.platforms = new Map();
     this.engine = null;
     this.platformService = null;
+    this.loginService = null;
     this.isRunning = false;
   }
 
@@ -85,17 +87,24 @@ console.log("All managers created");
       console.log("PLATFORMS OK");
 
       // Initialize engine-backed platform service
-      this.engine = new AdapterRegistry();
-      this.platformService = new PlatformService(this);
+this.engine = new AdapterRegistry();
+this.platformService = new PlatformService(this);
+
+// Initialize login service
+this.loginService = new LoginService(this);
+this.loginService.setPlatformService(this.platformService);
 
       // Initialize Discord bot
       this.bot = new DiscordBot();
-      this.bot.setApp(this);
-      this.bot.setPlatformService(this.platformService);
+this.bot.setApp(this);
+this.bot.setPlatformService(this.platformService);
+this.bot.setLoginService(this.loginService);
       console.log("DISCORDBOT OK");
       console.log("CREATING COMMAND HANDLER");
 
 this.commandHandler = new CommandHandler(this);
+this.commandHandler.registerCommands();
+this.bot.setCommandHandler(this.commandHandler);
 
 console.log("COMMAND HANDLER CREATED");
       logger.info('✅ All components initialized successfully');
@@ -154,7 +163,10 @@ throw error;
           logger.info('✅ Discord bot connected');
 
           // Send startup messages to configured channels
-          await this.bot.sendStartupMessages();
+await this.bot.sendStartupMessages();
+
+// Send the 3-step verification panel
+await this.bot.sendStartupVerificationPanel();
         } catch (error) {
           logger.warn({ error: error.message }, '⚠️  Discord bot connection failed - running without bot');
           this.bot = null;
@@ -214,6 +226,10 @@ throw error;
 
       if (this.queueManager) {
         await this.queueManager.close();
+      }
+
+      if (this.platformService) {
+        await this.platformService.shutdown();
       }
 
       // Close all platform sessions

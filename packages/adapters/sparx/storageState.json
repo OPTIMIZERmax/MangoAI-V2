@@ -1,0 +1,623 @@
+{
+  "cookies": [
+    {
+      "name": "sl_school",
+      "value": "48503347-b17f-435b-9e7c-a48be1428762",
+      "domain": "api.sparx-learning.com",
+      "path": "/oauth2/login",
+      "expires": -1,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "oauth2_login_session_64a25",
+      "value": "92FZt0bfPEW6iI80geNRZ8UWON2XaR4Lnks6XMQAQ1lkhWK02TTUDsvrwyOcJaTa-KwU0cwmGC_7u88hmm9omH3t_UC9ABzetaIqxw==",
+      "domain": "api.sparx-learning.com",
+      "path": "/oauth2",
+      "expires": -1,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "_gorilla_csrf",
+      "value": "MTc4NjUzMzc4MXxJbWhJZEhOTU9IcEVURmRPY0VnMVduUk1jakJMTW1GYVNWSXJlVFk1WjJKU2FsTTFVRnBJYkU4MWQwMDlJZ289fA0UbzejZiEJlyh8pzeWdXoRBNN7WAx6N7mu7NshQzcW",
+      "domain": "auth.sparx-learning.com",
+      "path": "/oauth2",
+      "expires": -1,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "oauth2_login_session_AcxES",
+      "value": "EG_9ZewOx0MxZxjZcnlq7HTAfqjLOZ7qkUqkDesNas3x2CQ8hlRRBmK5sUfeA6tdLfUVAMiUU6PQa0P3dfj-N7Mdwg7vLi8UEBIjaA==",
+      "domain": "api.sparx-learning.com",
+      "path": "/oauth2",
+      "expires": -1,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "oauth2_login_session_peurG",
+      "value": "59rmVj2-Sb2pt80kEBaZmMqQrjN3nDEjN9tTS4LnDQoawIYh9PlZGjtGErBlhVYgvRFNvS0AF9DaGKLxkwj4w9wfGlzXUtO2DPq3ZA==",
+      "domain": "api.sparx-learning.com",
+      "path": "/oauth2",
+      "expires": -1,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "oauth2_login_session_3R5Yq",
+      "value": "BuMioftrKLdd8R7iGqEaXS25MSkZOhXhcKDx_OZGHxM-K1YmtlqVljTZvyDdkLFAa_chHhar-DQ3PLfmrT68Dq7PqPdRfEvDhbZwDw==",
+      "domain": "api.sparx-learning.com",
+      "path": "/oauth2",
+      "expires": -1,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "oauth2_login_session_s6p2X",
+      "value": "6aVJ6OyfUVpepCeJ8DQEoEUiCYtKaA17zZP3kbDHYk6nsqhBIjT-bMn-0mbAyqVkgmPgY3bkttG8E7ac9bh48m294kcHJzQquJmyJA==",
+      "domain": "api.sparx-learning.com",
+      "path": "/oauth2",
+      "expires": -1,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "oauth2_login_session_TMtdR",
+      "value": "r8Z7G6NzO-yKVqgLFpomZQ6x8LZjbdDXkwTBheXJzqXoOoxsRqSRuxhxsoHxPkiVt3EcjLFjVNiJY5XtMgpMhuv-X2xjjHfRPRIleg==",
+      "domain": "api.sparx-learning.com",
+      "path": "/oauth2",
+      "expires": -1,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "oauth2_login_session_nerEV",
+      "value": "JB2sZbPzlYl4n_vz3LflueqsV5HXxYOfqaPNRqFUsNsLgJMgMgP69iIEsIL-dAWCe1O_dTVYabm0qVQxCt4OI63bBMzWD7wgM08wmQ==",
+      "domain": "api.sparx-learning.com",
+      "path": "/oauth2",
+      "expires": -1,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "oauth2_login_session_TPGlj",
+      "value": "JvMveEo3VT9rFFIFDnB_ZjXtf9rlGoOmlIOONZ_wAFje4ywRkWcWGJZduveN55fY17D0ZJVic6yH7KG4bm-lrLIQ5DbL9d4QORieHw==",
+      "domain": "api.sparx-learning.com",
+      "path": "/oauth2",
+      "expires": -1,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "oauth2_login_session_OuEat",
+      "value": "czns5IIkNRo5_lSnbBMfbrg3KN-tKTP2cUmjOT6ztOJkj8U25xwMLV6WZ6fV03a0Y2DE6wjJZd4Yiv3kUEuErccvFBUiloIHotrtiw==",
+      "domain": "api.sparx-learning.com",
+      "path": "/oauth2",
+      "expires": -1,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "oauth2_login_session_OWdeH",
+      "value": "_GfQRgstgOa30JaRxenZ4sfdwjDklaXWMExA_9gs5beu8x3RPZCUzZThpbeiAR-_tZI4Rtjc4lyx8oHv6kuoaO0X138tLwfdn7KyxQ==",
+      "domain": "api.sparx-learning.com",
+      "path": "/oauth2",
+      "expires": -1,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "oauth2_login_session_HyJ5d",
+      "value": "3TZhEk5G3ra757P8bWQ0iniPZTPDVUWq9a_7fCtNU_9SOJX9LnPS18vuwEmiyqTHNZLCVVGAeF485vKelFbEELdmrRK6OgWWegoThQ==",
+      "domain": "api.sparx-learning.com",
+      "path": "/oauth2",
+      "expires": -1,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "oauth2_login_session_uiEt3",
+      "value": "MtT8loqx4aeFyU1GECQX7rV9dSZJxSuLQy14kx4WJs3kGIZpRQ-p1CaQXzINg_vIaEXNNGs7OP2vqFqMRczGUN4ONv1IsTMHsGY4tg==",
+      "domain": "api.sparx-learning.com",
+      "path": "/oauth2",
+      "expires": -1,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "oauth2_login_session_uNoVC",
+      "value": "-4Ns-d5Q3WQxP7Le-PZK11fPmjbK6Abj13O1zplc0igAN2LTWYcOw7u44pfzTqtkehg7BMLH6qfVT6Bdcis-8JEY4s0QYAueGeUeiQ==",
+      "domain": "api.sparx-learning.com",
+      "path": "/oauth2",
+      "expires": -1,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "oauth2_login_session_sKIRL",
+      "value": "FmjyIwwxBp6GGpcDMHFew0Bd-cuX7nujvmyl5rj_VBKJrPQlo_ZXEFdpuR5yZu15X9x95iRoVqoMn7dBcnJ4mH2qCzZeZFfAqvnocw==",
+      "domain": "api.sparx-learning.com",
+      "path": "/oauth2",
+      "expires": -1,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "oauth2_login_session_cdIY5",
+      "value": "xq7i_euhkUEc-6YDEkVAWIBfd_OVO44i4y-HUkrDkYKkyRNO76KbnJZ3tk-mtNU3uAQ6ZAVe_9Yv82xfL-tvzSWzM0xfFwf5lmCVOA==",
+      "domain": "api.sparx-learning.com",
+      "path": "/oauth2",
+      "expires": -1,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "oauth2_login_session_FXfqm",
+      "value": "uCvVjmA8EOx3YWwCvUxVUFKuJXjYaq_gkE1KLpsde6Oq75TUEfHUJC68k1wCfycVvuPoyykM3Oql6A-RW43Pv5WOpFjuCvUGD9v-EQ==",
+      "domain": "api.sparx-learning.com",
+      "path": "/oauth2",
+      "expires": -1,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "oauth2_login_session_27m-L",
+      "value": "_gJwyIfM9fiM_gFYZ_PRiLUhwHpd_3M7Zv6WC4SfEg13p1uZ8npL7-OCcI0kZ4yOXfBXucI9Q4u6ep3sDwzNclAJbiBqJUkP9D4VdA==",
+      "domain": "api.sparx-learning.com",
+      "path": "/oauth2",
+      "expires": -1,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "oauth2_login_session_JJDzb",
+      "value": "Ih4DMvi9J66p4X7s_gaL6rG3sroaGCVNhHYTNAS6zO5LiWkrxiagg7aAUEZz0VxOHjKJ_Csb8T7ENt6Ej0xAU7VNuVTBtTXY5lE4Pw==",
+      "domain": "api.sparx-learning.com",
+      "path": "/oauth2",
+      "expires": -1,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "oauth2_login_session_Qh3dJ",
+      "value": "infz_0uhtTKrbkTLI1AVCPUuVY74bfCXepucco4DqW5DP9aD4T71WvCdVPBkNVaVxmFBQhnPtgU-r_tLOLx2mnF3ZFvLXKTy8keZrw==",
+      "domain": "api.sparx-learning.com",
+      "path": "/oauth2",
+      "expires": -1,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "oauth2_login_session_iPmy_",
+      "value": "43Oaf3K8fV5HXkT5zwD3XMg0b7BU4Gmba8mT6evW4Xe0nkqypiNCQ8RNPU02v2q0OIZ63gkGjN2_Bim2jPGIbvZBjDmQa4iAVXfGmQ==",
+      "domain": "api.sparx-learning.com",
+      "path": "/oauth2",
+      "expires": -1,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "oauth2_login_session_cFwSf",
+      "value": "wVW7RmoQcLT163QNwgGP8Ul7T3uoXxnopvLPp3aypf2L1PDQDw8Xl-FmYiFNmdWWf_Dqi8yaIB-6rlx6-v_0F4S4Fo44BuBMjgslEg==",
+      "domain": "api.sparx-learning.com",
+      "path": "/oauth2",
+      "expires": -1,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "oauth2_login_session_7zg5f",
+      "value": "hOVfLX8UeX2eeoa49F88lXxl7DqppXS3FR1JcrtF-_2S4wHm6JElzBWOmYenuISC5GWMGoMbZ7--7Tx8w4wbVLUezu4L3MFvP9Vlug==",
+      "domain": "api.sparx-learning.com",
+      "path": "/oauth2",
+      "expires": -1,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "oauth2_login_session_UPs7I",
+      "value": "INL1rFmOajdNc1s3qSnchdjJvoGukX546XgroldA-51XhNpcGubks4KwmP_Z-jduViUBwdFtM8o4RFfvFIOeuhB2tA2wdsbkWW-9Nw==",
+      "domain": "api.sparx-learning.com",
+      "path": "/oauth2",
+      "expires": -1,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "oauth2_login_session_DXT2X",
+      "value": "FV3FaTuXaIclNH9_ag5NISZ62aAf4G4BVWCqabvE5Rs4mdFLr6i5g_QU7I6yK44Y6vtz0lK2VADSd4ixZU9xYvpxv3IhUGXLf9l3Yg==",
+      "domain": "api.sparx-learning.com",
+      "path": "/oauth2",
+      "expires": -1,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "live-resolver-school",
+      "value": "bealhighschool",
+      "domain": "selectschool.sparx-learning.com",
+      "path": "/",
+      "expires": 1818069780.639331,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "CookieScriptConsent",
+      "value": "{\"action\":\"accept\",\"consenttime\":1741777132,\"categories\":\"[\\\"performance\\\",\\\"functionality\\\"]\"}",
+      "domain": ".sparx-learning.com",
+      "path": "/",
+      "expires": 1789125811,
+      "httpOnly": false,
+      "secure": true,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "x-ms-gateway-slice",
+      "value": "estsfd",
+      "domain": "login.microsoftonline.com",
+      "path": "/",
+      "expires": -1,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "stsservicecookie",
+      "value": "estsfd",
+      "domain": "login.microsoftonline.com",
+      "path": "/",
+      "expires": -1,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "AADSSO",
+      "value": "NA|NoExtension",
+      "domain": ".login.microsoftonline.com",
+      "path": "/",
+      "expires": -1,
+      "httpOnly": false,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "brcap",
+      "value": "0",
+      "domain": ".login.microsoftonline.com",
+      "path": "/",
+      "expires": 1821262219,
+      "httpOnly": false,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "fpc",
+      "value": "Ajyz_hlanYtAuClKgUSNG6g",
+      "domain": "autologon.microsoftazuread-sso.com",
+      "path": "/",
+      "expires": 1789125815.573376,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "x-ms-gateway-slice",
+      "value": "estsfd",
+      "domain": "autologon.microsoftazuread-sso.com",
+      "path": "/",
+      "expires": -1,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "stsservicecookie",
+      "value": "estsfd",
+      "domain": "autologon.microsoftazuread-sso.com",
+      "path": "/",
+      "expires": -1,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "wlidperf",
+      "value": "FR=L&ST=1786533818589",
+      "domain": ".microsoftonline.com",
+      "path": "/",
+      "expires": 1820229818,
+      "httpOnly": false,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "ESTSAUTHLIGHT",
+      "value": "+007beeaa-91bd-b4ad-664e-370490a7ba14",
+      "domain": "login.microsoftonline.com",
+      "path": "/",
+      "expires": -1,
+      "httpOnly": false,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "MicrosoftApplicationsTelemetryDeviceId",
+      "value": "3f1b734b-a6e9-4605-8c4d-6728a84b3bdc",
+      "domain": "mysignins.microsoft.com",
+      "path": "/",
+      "expires": 1819102225.376621,
+      "httpOnly": false,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "mysignins-region",
+      "value": "westeurope",
+      "domain": ".mysignins.microsoft.com",
+      "path": "/",
+      "expires": -1,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "MC1",
+      "value": "GUID=8d11c9d9cd2945d69a47cac2b60581a1&HASH=8d11&LV=202608&V=4&LU=1786533826301",
+      "domain": ".microsoft.com",
+      "path": "/",
+      "expires": 1818069825.969033,
+      "httpOnly": false,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "MSFPC",
+      "value": "GUID=8d11c9d9cd2945d69a47cac2b60581a1&HASH=8d11&LV=202608&V=4&LU=1786533826301",
+      "domain": "mysignins.microsoft.com",
+      "path": "/",
+      "expires": 1818069826.442094,
+      "httpOnly": false,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "_ga",
+      "value": "GA1.1.2082369635.1786533833",
+      "domain": ".sparx-learning.com",
+      "path": "/",
+      "expires": 1822126231.900557,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "_hjSessionUser_1820597",
+      "value": "eyJpZCI6IjRlM2RlNWVkLWY3MjItNTlmNS04OTcxLTc4MjU0NTc2NmExZiIsImNyZWF0ZWQiOjE3ODY1MzM4MzMyOTQsImV4aXN0aW5nIjp0cnVlfQ==",
+      "domain": ".sparx-learning.com",
+      "path": "/",
+      "expires": 1819102231,
+      "httpOnly": false,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "_hjSession_1820597",
+      "value": "eyJpZCI6IjA4Njg3NGNiLWE2NjAtNGViYy05NzgxLTYxMDU3NWYyMGE2ZiIsImMiOjE3ODc1NjYyMTUwMTQsInMiOjAsInIiOjAsInNiIjowLCJzciI6MCwic2UiOjAsImZzIjowLCJzcCI6MX0=",
+      "domain": ".sparx-learning.com",
+      "path": "/",
+      "expires": 1787568015,
+      "httpOnly": false,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "esctx-aDZ2swYTgc",
+      "value": "AQABCQEAAAAdDD7nC9b5Q7JPd_okEQRFRXZvU3RzQXJ0aWZhY3RzDQAAAAAACYF4jB_InmzoNWu5XyTP2ffhCtYcaPhOCxwBt2IK4E69i8tGTNjYoPdXQNkKC8U5hHqgeV6w_ecHXYXKR5fMTfSRBWWwFc2WxYJvrRChMPjj7S4_aBccAiOydaMEeO8qd0BIaR1ed3pYxzIapua1bCAA",
+      "domain": ".login.microsoftonline.com",
+      "path": "/",
+      "expires": -1,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "esctx",
+      "value": "PBgABBwEAAAAdDD7nC9b5Q7JPd_okEQRFRXZvU3RzQXJ0aWZhY3RzDQAAAAAAbsRZcS_ZtSn_m-hZjqNkYaCu8uV4WlwKCbeyMcV_Ri-ZJH31Nj2Mmp5Xu7s4gLipWeGH4IB5y0cEJJKJC3l_AeNflTlkOYWfndXlTwinNwI72GHjbjCjAB3-TcBKe6k7t9qEs3jYzPkqo7YtZJUAl-kVjCx6yYRtMfp5nhygznRdq85YmJvvEzuINk4c6yYmZamgWUwwF6xQ_4TylI0T4ER32G6SVFZErmUP4SKKlyVW7ntjTbTljFDzpbhvVvw1CiQ_133r8f16h4X0qp23gpjMRk-UxBIkyB8ImI-MoEK-yPW-_bAfLeNUIZQYCgxqlo6EPaVxFaOT7CGV7e3wd927rpriCi82TiCmPVbO3_kvZO0QtWbR3JrTKFbpg3drp56P6ItSK9hzDDauvJ_pv_awibqPxLlikdKEM8DHEdiBsYnMOsBmlTBVvT7nZ4-z4BaBO7dMAPSwIDgrmxsbPJm_Q8Fm5pLWqX8-8Rpvn-D5dtyANG5J4iLpwp4Nu-3pPXmmcxP6AookMpyCK93LotuUJZI8ALTKGOivoKKf3qDJ9n4F6NFVYIE0ano0dvhjmdrT9jp-NcNcQfA2GhAl8mCQx6CgCmxSfnaH61KBWfD6Ssjp2QM4PMlg9Yezey5O6r9XNUPx4cEHOvftv4hQ7P5NlwyUuBEcph0UWAB25YjmtenQyiFzuBm4GcLvTCFYP27NJxJtUR5Uo6anypNaEeKiDZ3dNT9mZsQz8sRnbyAgAA",
+      "domain": ".login.microsoftonline.com",
+      "path": "/",
+      "expires": -1,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "esctx-MEuOi4dKHAI",
+      "value": "AQABCQEAAAAdDD7nC9b5Q7JPd_okEQRFRXZvU3RzQXJ0aWZhY3RzDQAAAAAAd0oknN7SxwIqL9U9BpKkqKogpc_Af3XkQDMsAFe8R2x4GNbSIj7MOx0zlXMAzuQg6n8NayUY1pGmum8WytIcbRh3fCHxnKBHlF9tTS3FjEO2j84cvLWccU49Wo2NzXL1gQbMVj1alMMYcHCN73EB8yAA",
+      "domain": ".login.microsoftonline.com",
+      "path": "/",
+      "expires": -1,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "uaid",
+      "value": "c49fc2eee2ca4ecd912a426c71450aa1",
+      "domain": ".login.live.com",
+      "path": "/",
+      "expires": -1,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "MSPRequ",
+      "value": "id=N&lt=1787566221&co=1",
+      "domain": ".login.live.com",
+      "path": "/",
+      "expires": -1,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "ai_session",
+      "value": "a7TdG/YuQTm/+IJZzEbMqK|1787566225385|1787566225387",
+      "domain": "mysignins.microsoft.com",
+      "path": "/",
+      "expires": 1787568025,
+      "httpOnly": false,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "MS0",
+      "value": "ba110945cfb443ad972016d45dad1296",
+      "domain": ".microsoft.com",
+      "path": "/",
+      "expires": 1787568028.540669,
+      "httpOnly": false,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "ESTSAUTHPERSISTENT",
+      "value": "1.AQsAMFotuMkgIEe9MJeQivzKZwUzIo-Rum1KoYhG7uTDMpYAAIELAA.BQABFwQAAAADAOz_BQD0_0V2b1N0c0FydGlmYWN0cxAAAAAAAITPAa71ZjPAUQsElAw-BYyk9k0wSXtvbYJ0wyiPi9mtTYfYfcIExFx0F5OpaMcemZgemjAq5vB0AxM6K4gg9-S3AVbLubVsX0JIh4bUyU2tmpNOqkqX3zzcZgkBdHbTmlSqWMmcU13RhRktiVzR03_UWLjOMyRmmx1iFyGUi7BBNFsCwIrzYdUyH5jM61yDbh1pCaIRsLZMMgivgC_9gjr4B4vdUzP500cgxO7CAuEXKYRfMp29X4_gSc8ddIAf30qvxdeIOMeKwh0LYR0u5vJGTV0GFDfBK4srh_E_2tS6ORvhxYm5x_waTgLjLzEpfvzZdhzFh4AhongMw21Qb5AIXSn-sOpuBkjBMJ_nXwPkIGQvZnVIFMtT2ujPyvF_ftonCvix9RX4VcO-E5jdAzCVeOqFwvtNU9Fz53YoDCSsOe7l-ZzTVafdByaLBctWqX5SN7UuL3iBUPEkS9xD6kGJF3jyrbjSIdah34V6HY-40FozU8woJ084afVBRek_GCV0BC2K-kNMgiWjTYLSdXYEXXWdDXlQkAS1C0Rd5UMcYuhOR41pB7pw-570-SfKqXGDq7wKcbnG-uRRGOf8xHPYcjxcur2cBGoGgSi7y6Zh8cIExbw21WtSYqHZA4xsrv-Ju4b-EEGn4guFzfWrD39MfvQdCx5olSefpyiomA15KLJwSAHfNjbsOGIWDTHR1M6kuu9g3mjBhnxrFl-kRt6nVSuZCmQtCaGUaCJ8fQ7Q91ZrNO0uKBJdYLgwqk3jaOZtHct7n86h8J_zN8J8sRPT8CQgF7KxoMf2GSDPXl0ynIXq870GdH_pyAAhBkXNAJcqaIt0t-tCqhYNbXLlPBmAfzUnYi3QXqHpGnrZL8V8lqeiV_cb6cCt2a0IuQNC08wIK0yEB4WAwciSB1pbZTK11LUf-81BNJXknCK14zIpDpuWe2yluEXFwY1j4vhBJuMV1zI4uFrCY4ju64JvU_tLPZo5r5kqP0Orie8TmcJgRXgaYKqhB6xWBMXBP-af4fHMZMI3GAyYhrc1zqvNKWCyVc0YGSr3hQuUHXP2JHRSyteRDg0sBFSYamdCwDtW5hDSCi3FDlMb_MLNBXJaXEzi63VhcUTG4Q2psAj4gKa413N-H00PQ5dUHUAmTLadg8K2E3IquwaC6ngQPWmi-9uHPbhIA-Wbu7t09wsDkUVhrY42ZTtqubHsMlKZPltXvqW2J1NvviZNXjKEdVcwRQjyCAQM0mEEMzrpbIumKaB2mA",
+      "domain": ".login.microsoftonline.com",
+      "path": "/",
+      "expires": 1795342231.396517,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "ESTSAUTH",
+      "value": "1.AQsAMFotuMkgIEe9MJeQivzKZwUzIo-Rum1KoYhG7uTDMpYAAIELAA.",
+      "domain": ".login.microsoftonline.com",
+      "path": "/",
+      "expires": -1,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "buid",
+      "value": "1.AQsAMFotuMkgIEe9MJeQivzKZwUzIo-Rum1KoYhG7uTDMpYAAIELAA.AQABGgEAAAAdDD7nC9b5Q7JPd_okEQRFRXZvU3RzQXJ0aWZhY3RzAwAAAAAAdD2nfdTh348HDmM3XAfQXOw3fpGpxpUR9_hIzvvpcDR_fzFwVBnD-fbw_B6SxGgQiwVNT74at76n_kQRbAoJlP5i1vA654_qrIrWfLhsnP0COdCwUR9_TpRLDPW8zpj8eN0q4rq6OjGga76uVLrd9NXH4Ys6AnHsy-JXSIlEb-F7kvgtsWerbTTjXgm3lxKoIAA",
+      "domain": "login.microsoftonline.com",
+      "path": "/",
+      "expires": 1790158231.396751,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "CCState",
+      "value": "Q3BJQkNoOWhjMlZ1ZEdneE5ERTNRR0psWVd4b2FXZG9jMk5vYjI5c0xtTnZMblZyRWdFQklna0pnT1pML2k5NTNrZ3FDUW5OaVRmRjdBWGZTRElxQ2hJS0VBd0FBQUFBQUFBQXdBQUFBQUFBQUFBU0NRbjJBYU8xSWdUZlNCb0pDZEtaUXVuSEFkOUlPQUJJQUZJU0NoQXdXaTI0eVNBZ1I3MHdsNUNLL01wbldoSUtFUHF4UWoxbFR6OUJwTThQRll1R0pqSVNFZ29RSTlCbzhiTm9ka3U0VFhhTzRxdVlkeG9KQ2FxWFF1bkhBZDlJTXA0QkFnQUJId0VBQUFBZEREN25DOWI1UTdKUGQvb2tFUVJGQXdEcy93VUE5UDlGZG05VGRITkJjblJwWm1GamRITVNBQUFBQUFBSjQvaVhtcnNpUDlRR3ArOVk2QW1TckpBY3dFVDNWeVRxdlRuNWhOSGQ3RUdpOFgvZFNIQXlmbXRxbmdhNGVHZGNwRXJKaXJEYmVPNzVYMnVFY1hhOEVWTlhETTJ2T0lTWC85cUlRdERkVDlvcVhqbXB6TCtTQVgrN2R6S0dlWnZ0TUlWOExmMnp6azA9",
+      "domain": ".login.microsoftonline.com",
+      "path": "/",
+      "expires": 1788430231.396817,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "SignInStateCookie",
+      "value": "CBQABFgIAAAADAOz_BQD0_0V2b1N0c0FydGlmYWN0cwYAAAAAAN7HZ9a2LZEu0XM1-EV4bNAqYdIM5MOfAOry8v8-XCSrOc79FnKTO_YBcJUmEatZEec8POrMeEF6ozkk1dO1amOZCSoMOILej6GPH--NfpxtZ5gI9ZNt3A-ve1o-_Ui8aRQqArnaUrs2iRa7tLUEnFzmXJemTll-e2LY1ooNrDdcQoCmC81Z1t9Mog-XZ-XdjTsEqEsFNB2fEcJwfFoAi6OgOz9kzQ7kCwC_2INLMMkmF0tl_-nUol9aw5LQbcASVqiSI22I4ZTEn7x2Pzzbh0SqjrHBNQXehnev3AVTzC2Rb-byV-aIEord-y5kxPgH9-YrK0Sg0SxUkx4Lo_0GxSpjU_dzSkrNmb-5-FOLlvD1KVRcTFi06Ro5IAhVc7fJ8ki_gcaaS_m75Bpx0NHwgLSL97PPtdLjqDlg4FCjzDV8aao1C_MuDZVCxsctl8kgBnV1PK8n0iP14XLzLDQmsMBD_42nFvMIycBXh47PHKwacWpM8bp4xPqfJgUYjtr0kWndWTynfXHLKduViyeI37FDjf3Ai2wh3USOuHIOfGCGGhi8ADKL--91y6RyZvfsKmteqCxOvqYF8AMaigLOWKVvklt8jrxBLUbKrPQ8ZShMEEsHssIdrdf5ywLoCmWp31u-spmGkl89UfEy767OHmHHPi1xogQiBT0ViIPu11GcLDbUcTSqopdH10aZHH0zrSrz_1epZcTxajFltnPDyKDsHV-PXAyIOajLZCup7EqBz8U0SUIwG_vKw3rRxjgJNRmbpjybG-1uRoQ4sEWTjgU5bOUfWecRn1vxzBfNmfxR11MRI4_wyU7hqivMwGvJ8e6dtpxlDVkt4SlDk9jHHAtdPxwd",
+      "domain": ".login.microsoftonline.com",
+      "path": "/",
+      "expires": -1,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "fpc",
+      "value": "AphPSsZaWsFIlT3puItg29ciVVevAQAAAJYPHuIOAAAA8V6SgQEAAACMDx7iDgAAAO1IJaUBAAAAjg8e4g4AAAA",
+      "domain": "login.microsoftonline.com",
+      "path": "/",
+      "expires": 1790158231.396976,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "live_ssoprovider_session",
+      "value": "MTc4NzU2NjIzMXxEWDhFQVFMX2dBQUJFQUVRQUFELUFVWF9nQUFCQm5OMGNtbHVad3dOQUF0elpYTnphVzl1UkdGMFlWMW5hWFJvZFdJdVkyOXRMM04xY0dWeWMzQmhjbXR6TDBOc2IzVmtSWGh3WlhKcGJXVnVkSE12ZFhObGNtMWhibUZuWlcxbGJuUXZjM052Y0hKdmRtbGtaWEl2YVc1MFpYSnVZV3d2YjJGMWRHaHpaWE56YVc5dUxrUmhkR0hfZ1FNQkFRUkVZWFJoQWYtQ0FBRUtBUXBRY205MmFXUmxja2xFQVF3QUFRWlZjMlZ5U1VRQkRBQUJDRlZ6WlhKdVlXMWxBUXdBQVJCQmJHeHZkMlZrVlhObGNsUjVjR1Z6QWYtRUFBRU1TRzl6ZEdWa1JHOXRZV2x1QVF3QUFSSkJiR3h2ZDJWa1UyTm9iMjlzVG1GdFpYTUJfNFlBQVExRmVIUmxibVJUWlhOemFXOXVBUUlBQVF4SmMxTndZWEo0VTNSaFptWUJBZ0FCRkZOVFQxQnliM1pwWkdWeVUyVnpjMmx2YmtsRUFRd0FBUlJUVTA5UWNtOTJhV1JsY2tOVFVrWlViMnRsYmdFTUFBQUFKUC1EQWdFQkZsdGRjM052ZFhObGNuUjVjR1V1VlhObGNsUjVjR1VCXzRRQUFRd0FBQmJfaFFJQkFRaGJYWE4wY21sdVp3SF9oZ0FCREFBQV85WF9ndl9SQVFWaGVuVnlaUUVrTkRka1ptSmtZemd0T0Rrek1TMHhNV1l3TFRrd09Ua3RNbUprWlRGbU5UVXdObUpqQVI5QlUyVnVkR2d4TkRFM1FFSmxZV3hJYVdkb1UyTm9iMjlzTG1OdkxuVnJBUUlGYzNSaFptWUhjM1IxWkdWdWRBRWtORGcxTURNek5EY3RZakUzWmkwME16VmlMVGxsTjJNdFlUUTRZbVV4TkRJNE56WXlCQ1JtWkdJek1qSTNaUzFrTWpsa0xUUTJaall0WVRBNVlpMHpabU15TlRRMk1HVTBPVEFCSkRKaU0yTTBOVEZrTFRNek9USXROR1poT1MxaU5tWTNMV1V4TnpNeFlUUmxOMk5oT1FBPXw-IONtqUuA97YpGiH0ZpvHUwxOB33bVZ5t1TcYvEumbw==",
+      "domain": ".sparx-learning.com",
+      "path": "/",
+      "expires": 1790158230.733636,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "_ga_G8SNQZC2LY",
+      "value": "GS2.1.s1787566214$o10$g1$t1787566231$j43$l0$h0",
+      "domain": ".sparx-learning.com",
+      "path": "/",
+      "expires": 1822126231.911606,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "spxlrn_session",
+      "value": "MTc4NzU2NjIzMnxaSkZBdzYzY2V2WVk3WTJYcEpBOGl5Qm9fYWd1aVUtVUd6eE1ZYzRvWFoxckVoRGdxc0l0ZlM4NEVGejRwWDFZN1ZObHN4cDd3c0czLTA5VnRvTDhJbFJ3VDg5MlN5OWdTRll1bTFLLVJxUnFXQ3Q1T0dTbzJHamtVelBRN2hEaEVXWUlvQktBc1laU1dNM3JkeWZjQkpRbzNwZHNNaUVOc05nUjRyVW9NQl9PeXNwTXBJMGVKY0VLLTRvdVZDZkF4QlFZYnNPSDh2dy1MYmh5Z25ScU1TVUhwVllKMFFTdllQWlpFa3o4WmRpd2ptUUpDT0U3c28yMVE4UGQ4X0tFbTJyM2xWM3JFcmVzcXFmczExWjBHOGZhQi1WMC14b0tHNFZYYmhFdlZOdGh1V1VfbnFVSEJzbmZDUEN4Yk5sNzJfbXlIa0NJR0FwdUJnYk9oc3ZtQjl3VWxnaURtd3lkSUZYbDdQRjktNEZhNmF5Sk9FdUttUUNKbXppLW1EYjljcGp0V0xjMXZwc2FUempfUmlFRi00bnFOSjAzQ1JySzA0TXJjdW9kRU1CNDRDckV0T1JnVkdjRE1udGtOWWtPSnJ4MVFHUEEwNGRkbTRvPXxFrozhoTNHakWVB4T4fvHGXbCDBG3TIaBsaUhP2TD9jQ==",
+      "domain": ".sparx-learning.com",
+      "path": "/",
+      "expires": 1787569831.949301,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "Lax"
+    }
+  ],
+  "origins": [
+    {
+      "origin": "https://mysignins.microsoft.com",
+      "localStorage": [
+        {
+          "name": "whAvailabilitySent",
+          "value": "true"
+        },
+        {
+          "name": "registrationLogSession",
+          "value": "37495bc6-6b95-4202-88c2-3687d41d11a6"
+        },
+        {
+          "name": "ms-client-id",
+          "value": "c85ec473f8be455b99024b601b04de71"
+        }
+      ]
+    }
+  ]
+}

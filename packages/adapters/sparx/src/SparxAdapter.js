@@ -1,4 +1,4 @@
-import { BaseAdapter } from "@mango/engine";
+﻿import { BaseAdapter } from "@mango/engine";
 
 import { BrowserManager } from "./browser/BrowserManager.js";
 import { SparxClient } from "./services/SparxClient.js";
@@ -6,7 +6,6 @@ import { SessionManager } from "./auth/SessionManager.js";
 
 import TaskRunner from "./tasks/TaskRunner.js";
 import { SparxMathsWorkflow } from "./workflows/SparxMathsWorkflow.js";
-
 
 export class SparxAdapter extends BaseAdapter {
   constructor() {
@@ -30,7 +29,6 @@ export class SparxAdapter extends BaseAdapter {
     this.workflow = new SparxMathsWorkflow(this);
   }
 
-
   get metadata() {
     return {
       id: "sparx",
@@ -43,15 +41,17 @@ export class SparxAdapter extends BaseAdapter {
     };
   }
 
-
   async initialize(config = {}) {
-    await this.browserManager.initialize();
+  const storageStatePath =
+    "packages/adapters/sparx/storageState.json";
 
-    await super.initialize(config);
+  await this.browserManager.initialize({
+    storageState: storageStatePath
+  });
 
-    console.log("Sparx adapter initialized");
-  }
-
+  await super.initialize(config);
+  console.log("Sparx adapter initialized");
+}
 
   async executeTask(taskPayload, context) {
     console.log(
@@ -59,22 +59,26 @@ export class SparxAdapter extends BaseAdapter {
       taskPayload
     );
 
-
     await context.reportProgress(
       10,
       "Browser initialized"
     );
 
+    // Cookie login
+    if (
+      taskPayload.action === "login" &&
+      taskPayload.method === "cookies"
+    ) {
+      const cookies =
+        this.parseCookies(taskPayload.cookies);
 
-    /*
-      Workflow execution
+      return await this.sessionManager.loginWithCookies(
+        cookies,
+        context
+      );
+    }
 
-      Used for full Sparx flows:
-      - detect site
-      - check session
-      - select school
-      - login
-    */
+    // Full workflow
     if (
       taskPayload.action === "workflow-start"
     ) {
@@ -83,25 +87,12 @@ export class SparxAdapter extends BaseAdapter {
       );
     }
 
-
-    /*
-      Individual tasks
-
-      Examples:
-      {
-        action: "site-info"
-      }
-
-      {
-        action: "session-status"
-      }
-    */
+    // Individual tasks
     return await this.taskRunner.execute(
       taskPayload,
       context
     );
   }
-
 
   async shutdown() {
     await this.browserManager.shutdown();
@@ -112,7 +103,39 @@ export class SparxAdapter extends BaseAdapter {
       "Sparx adapter shut down"
     );
   }
+
+  parseCookies(cookies) {
+    if (Array.isArray(cookies)) {
+      return cookies;
+    }
+
+    if (!cookies) {
+      return [];
+    }
+
+    return String(cookies)
+      .split(";")
+      .map((cookie) => {
+        const [name, ...rest] =
+          cookie.trim().split("=");
+
+        return {
+          name,
+          value: rest.join("=")
+        };
+      });
+  }
 }
 
-
 export default SparxAdapter;
+
+
+
+
+
+
+
+
+
+
+

@@ -1,3 +1,3 @@
-test("MangoAI test system works", () => {
+﻿test("NexusAI test system works", () => {
   expect(true).toBe(true);
 });

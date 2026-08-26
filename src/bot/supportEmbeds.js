@@ -12,8 +12,8 @@ export class SupportEmbedFactory {
   static buildSupportMainEmbed() {
     const embed = new EmbedBuilder()
       .setColor('#1f1f2e')
-      .setTitle('🥭 MangoAI • Rapid Support')
-      .setDescription('Need help? MangoAI support is here to assist you ASAP!')
+      .setTitle('🥭 NexusAI • Rapid Support')
+      .setDescription('Need help? NexusAI support is here to assist you ASAP!')
       .setImage('https://images.unsplash.com/photo-1611532736579-6b16e2b50449?w=800&q=80')
       .addFields(
         {
@@ -27,14 +27,14 @@ export class SupportEmbedFactory {
       )
       .setTimestamp();
 
-    embed.setFooter({ text: '🥭 MangoAI • Customer support' });
+    embed.setFooter({ text: '🥭 NexusAI • Customer support' });
     return embed;
   }
 
   static buildTicketCreatedEmbed(ticket) {
     const embed = new EmbedBuilder()
       .setColor('#00FF00')
-      .setTitle('🥭 ✅ MangoAI Support Ticket Created')
+      .setTitle('🥭 ✅ NexusAI Support Ticket Created')
       .addFields(
         { name: 'Ticket ID', value: `\`${ticket.id}\``, inline: false },
         { name: 'Category', value: ticket.category.toUpperCase(), inline: true },
@@ -52,7 +52,7 @@ export class SupportEmbedFactory {
       )
       .setTimestamp();
 
-    embed.setFooter({ text: '🥭 MangoAI • Support ticket' });
+    embed.setFooter({ text: '🥭 NexusAI • Support ticket' });
     return embed;
   }
 
@@ -91,7 +91,7 @@ export class SupportEmbedFactory {
       inline: false,
     });
 embed.setFooter({
-  text: '🥭 MangoAI • Support status'
+  text: '🥭 NexusAI • Support status'
 });
     embed.set
     embed.setTimestamp();
@@ -101,7 +101,7 @@ embed.setFooter({
   static buildSupportQueueEmbed(stats) {
     const embed = new EmbedBuilder()
       .setColor('#5865F2')
-      .setTitle('🥭 MangoAI • Support Statistics')
+      .setTitle('🥭 NexusAI • Support Statistics')
       .addFields(
         { name: 'Total Tickets', value: `${stats.totalTickets}`, inline: true },
         { name: 'Open', value: `🔴 ${stats.open}`, inline: true },
@@ -241,3 +241,4 @@ export class SupportActionRowFactory {
 }
 
 export default { SupportEmbedFactory, SupportActionRowFactory };
+

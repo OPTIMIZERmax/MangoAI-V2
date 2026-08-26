@@ -75,7 +75,7 @@ async function login({ school, username, password, type } = {}) {
     }, 40000);
 
     browser = await chromium.launch({
-      headless: true,
+      headless: false,
       args: [
         '--start-maximized',
         '--no-sandbox',
@@ -125,15 +125,23 @@ async function login({ school, username, password, type } = {}) {
       Object.defineProperty(navigator, 'platform', { get: () => 'Win32' });
     });
 
-    await page.goto(startURL, {
-      waitUntil: 'domcontentloaded',
-      timeout: 10000
-    });
+    addLog(`ABOUT TO GOTO: ${startURL}`);
+
+await page.goto(startURL, {
+    waitUntil: 'domcontentloaded',
+    timeout: 10000
+});
+
+addLog(`GOTO FINISHED. URL: ${page.url()}`);
+
+addLog(`ABOUT TO CHECK LOGIN TYPE: ${type}`);
 
     addLog(`Navigated to login page. Using type: ${type}`);
 
-    if (type.toLowerCase() !== 'normal') {
+    if (type.toLowerCase() === 'microsoft') {
+      } else if (type.toLowerCase() === 'normal') {
       // look for any element (button/input) whose formaction starts with the SSO URL
+      addLog('ABOUT TO CLICK MICROSOFT SSO BUTTON');
       await page.evaluate(() => {
         const selector =
           'button[formaction^="https://auth.sparx-learning.com/oauth2/login"], input[formaction^="https://auth.sparx-learning.com/oauth2/login"]';
@@ -141,8 +149,20 @@ async function login({ school, username, password, type } = {}) {
         const el = document.querySelector(selector);
         if (el) el.click();
       });
+      addLog(`MICROSOFT SSO CLICK ATTEMPT FINISHED. URL: ${page.url()}`);
+      addLog(`About to enter smartLogin. Current URL: ${page.url()}`);
 
-      smartLoginVar = await smartLogin(page, username, password, type, landedFunction, addLog);
+smartLoginVar = await smartLogin(
+    page,
+    username,
+    password,
+    type,
+    landedFunction,
+    addLog
+);
+
+addLog(`smartLogin returned. Current URL: ${page.url()}`);
+addLog(`smartLogin result: ${JSON.stringify(smartLoginVar)}`);
 
     } else {
       await page.waitForSelector('.sm-input', { state: 'visible', timeout: 5000 }).catch(() => {

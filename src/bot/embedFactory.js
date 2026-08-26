@@ -15,6 +15,8 @@ import {
 
 export class EmbedFactory {
 
+  
+
   static buildProgressBar(progress, length = 20) {
     const filled = Math.round((progress / 100) * length);
     const empty = length - filled;
@@ -30,7 +32,7 @@ export class EmbedFactory {
         .setTitle('❌ Unknown Platform')
         .setDescription('This platform is not supported.')
         .setFooter({
-          text: '🥭 MangoAI V2'
+          text: '🥭 NexusAI V2'
         });
     }
 
@@ -59,14 +61,14 @@ export class EmbedFactory {
       )
       .setTimestamp()
       .setFooter({
-        text: '🥭 MangoAI V2'
+        text: '🥭 NexusAI V2'
       });
   }
 
   static buildHomeworkEmbed(tasks, summary) {
     const embed = new EmbedBuilder()
       .setColor('#00FF00')
-      .setTitle('🥭 MangoAI • Homework Progress')
+      .setTitle('🥭 NexusAI • Homework Progress')
       .setTimestamp();
 
     if (tasks.length === 0) {
@@ -101,15 +103,15 @@ export class EmbedFactory {
       }
     );
 
-    embed.setFooter({ text: '🥭 MangoAI • Smart homework completion' });
+    embed.setFooter({ text: '🥭 NexusAI • Smart homework completion' });
     return embed;
   }
 
   static buildPremiumEmbed(tierInfo, tiers) {
     const embed = new EmbedBuilder()
       .setColor('#FFD700')
-      .setTitle('🥭 MangoAI • Premium Plans')
-      .setDescription('Unlock unlimited homework power with MangoAI Premium.')
+      .setTitle('🥭 NexusAI • Premium Plans')
+      .setDescription('Unlock unlimited homework power with NexusAI Premium.')
       .setTimestamp();
 
     for (const [tierName, tierData] of Object.entries(tiers)) {
@@ -137,10 +139,10 @@ export class EmbedFactory {
     });
 
     if (tierInfo.isExpired && tierInfo.tier === 'TRIAL') {
-      embed.setDescription('❌ **Your trial has expired!** Upgrade to MangoAI Premium for unlimited access.');
+      embed.setDescription('❌ **Your trial has expired!** Upgrade to NexusAI Premium for unlimited access.');
     }
 
-    embed.setFooter({ text: '🥭 MangoAI • Premium membership' });
+    embed.setFooter({ text: '🥭 NexusAI • Premium membership' });
     return embed;
   }
 
@@ -156,15 +158,15 @@ export class EmbedFactory {
       )
       .setTimestamp();
 
-    embed.setFooter({ text: '🥭 MangoAI • Past papers library' });
+    embed.setFooter({ text: '🥭 NexusAI • Past papers library' });
     return embed;
   }
 
   static buildTrialEmbed() {
     const embed = new EmbedBuilder()
       .setColor('#00FF00')
-      .setTitle('🥭 MangoAI • Free Trial')
-      .setDescription('Get 24 hours of unlimited access to all MangoAI features!')
+      .setTitle('🥭 NexusAI • Free Trial')
+      .setDescription('Get 24 hours of unlimited access to all NexusAI features!')
       .addFields(
         {
           name: '✅ What You Get',
@@ -176,20 +178,20 @@ export class EmbedFactory {
         },
         {
           name: '💰 Upgrade?',
-          value: 'Upgrade to MangoAI Premium for just **£10**!',
+          value: 'Upgrade to NexusAI Premium for just **£10**!',
         }
       )
       .setTimestamp();
 
-    embed.setFooter({ text: '🥭 MangoAI • Limited time offer' });
+    embed.setFooter({ text: '🥭 NexusAI • Limited time offer' });
     return embed;
   }
 
   static buildScheduleEmbed(schedules) {
     const embed = new EmbedBuilder()
       .setColor('#5865F2')
-      .setTitle('🥭 MangoAI • Auto-Schedules')
-      .setDescription('Stay on top of your homework routine with MangoAI automated reminders.')
+      .setTitle('🥭 NexusAI • Auto-Schedules')
+      .setDescription('Stay on top of your homework routine with NexusAI automated reminders.')
       .setTimestamp();
 
     if (schedules.length === 0) {
@@ -198,7 +200,7 @@ export class EmbedFactory {
         value: 'Create one to automate homework reminders at specific times and days.',
         inline: false,
       });
-      embed.setFooter({ text: 'MangoAI • Smart scheduling' });
+      embed.setFooter({ text: 'NexusAI • Smart scheduling' });
       return embed;
     }
 
@@ -213,14 +215,14 @@ export class EmbedFactory {
       });
     }
 
-    embed.setFooter({ text: '🥭 MangoAI • Automated scheduling' });
+    embed.setFooter({ text: '🥭 NexusAI • Automated scheduling' });
     return embed;
   }
 
   static buildQueueEmbed(queueStats) {
     const embed = new EmbedBuilder()
       .setColor('#FF6B6B')
-      .setTitle('🥭 MangoAI • Queue Status')
+      .setTitle('🥭 NexusAI • Queue Status')
       .setDescription(`**Total in Queues**: ${queueStats.totalInQueues}`)
       .setTimestamp();
 
@@ -232,7 +234,7 @@ export class EmbedFactory {
       });
     }
 
-    embed.setFooter({ text: '🥭 MangoAI • Queue management' });
+    embed.setFooter({ text: '🥭 NexusAI • Queue management' });
     return embed;
   }
 
@@ -246,61 +248,487 @@ export class EmbedFactory {
 }
 
 export class ContainerFactory {
-  static buildLearningPlatformContainer(hasGif = true) {
-    const section = new SectionBuilder()
-      .addTextDisplayComponents(
-        new TextDisplayBuilder().setContent("# Choose a Platform\n\n> Select the service you want to join.\n> MangoAI will open the correct login flow for that platform.")
-      );
 
-    if (hasGif) {
-      section.setThumbnailAccessory(
-        new ThumbnailBuilder({
-          media: {
-            url: "attachment://standard.gif"
-          }
-        })
-      );
-    }
+  static buildLearningHomeContainer(hasGif = true) {
+  const section = new SectionBuilder()
+  .addTextDisplayComponents(
+    new TextDisplayBuilder().setContent(
+      "# NexusAI Learning Platform\n\n" +
+      "[**FAQ ↗**](https://discord.com/channels/1022541804966527066/1535025670466310394)\n" +
+      "Your gateway to personalised AI tutoring assistance.\n" +
+      "Our verified tutors are available to help you across multiple fields of study.\n" +
+      "Press the Join Queue button below to connect with a qualified tutor.\n\n" +
+      "**__Notes__**\n" +
+      "> • Get personalised help for all your questions\n" +
+      "> • Connect with experienced tutors in real-time\n" +
+      "> • Solves the top 5% most difficult problems\n" +
+      "> • Secure and confidential tutoring sessions"
+    )
+  );
 
-    const selectMenuRow = new ActionRowBuilder().addComponents(
-      new StringSelectMenuBuilder()
-        .setCustomId("platform_select")
-        .setPlaceholder("Select a Platform")
-        .addOptions(
-          new StringSelectMenuOptionBuilder().setLabel("Sparx Maths").setValue("join_sparxMaths").setEmoji({ name: "📚" }),
-          new StringSelectMenuOptionBuilder().setLabel("Sparx Reader").setValue("join_sparxReader").setEmoji({ name: "📖" }),
-          new StringSelectMenuOptionBuilder().setLabel("Sparx Science").setValue("join_sparxScience").setEmoji({ name: "🔬" })
-        )
+  if (hasGif) {
+    section.setThumbnailAccessory(
+      new ThumbnailBuilder({
+        media: {
+          url: "attachment://standard.gif"
+        }
+      })
     );
+  }
 
-    const buttonRow = new ActionRowBuilder().addComponents(
+
+  const queueRow = new ActionRowBuilder()
+    .addComponents(
+
       new ButtonBuilder()
         .setCustomId("platform_join_queue")
         .setLabel("Join Queue")
-        .setStyle(ButtonStyle.Danger)
-        .setEmoji({ name: 'GET_OUT', id: '1531029730541830175' })
+        .setStyle(ButtonStyle.Primary),
+
+      new ButtonBuilder()
+        .setCustomId("platform_saved_queue")
+        .setLabel("Saved Account")
+        .setEmoji("💾")
+        .setStyle(ButtonStyle.Success),
+
+      new ButtonBuilder()
+        .setCustomId("platform_check_queue")
+        .setLabel("Check Queue")
+        .setEmoji("📊")
+        .setStyle(ButtonStyle.Secondary)
+
     );
 
-    const container = new ContainerBuilder()
-      .setAccentColor(16032512)
-      .addSectionComponents(section)
-      .addSeparatorComponents(
-        new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Small).setDivider(true)
-      )
-      .addTextDisplayComponents(
-        new TextDisplayBuilder().setContent("👇 **Select a platform below**")
-      )
-      .addActionRowComponents(selectMenuRow, buttonRow);
 
-    return container;
+  const learningRow = new ActionRowBuilder()
+    .addComponents(
+
+      new ButtonBuilder()
+        .setCustomId("platform_tutorials")
+        .setLabel("Tutorials")
+        .setEmoji("🎓")
+        .setStyle(ButtonStyle.Secondary),
+
+      new ButtonBuilder()
+        .setCustomId("platform_slots")
+        .setLabel("View Slots")
+        .setEmoji("🎟️")
+        .setStyle(ButtonStyle.Secondary),
+
+      new ButtonBuilder()
+        .setCustomId("platform_history")
+        .setLabel("History")
+        .setEmoji("📜")
+        .setStyle(ButtonStyle.Secondary)
+
+    );
+
+
+  const accountRow = new ActionRowBuilder()
+    .addComponents(
+
+      new ButtonBuilder()
+        .setCustomId("settings")
+        .setLabel("Settings")
+        .setEmoji("⚙️")
+        .setStyle(ButtonStyle.Secondary),
+
+      new ButtonBuilder()
+        .setCustomId("feedback")
+        .setLabel("Feedback")
+        .setEmoji("💬")
+        .setStyle(ButtonStyle.Secondary)
+
+    );
+
+
+  return new ContainerBuilder()
+    .setAccentColor(16032512)
+    .addSectionComponents(section)
+    .addSeparatorComponents(
+      new SeparatorBuilder()
+        .setSpacing(SeparatorSpacingSize.Small)
+        .setDivider(true)
+    )
+    .addTextDisplayComponents(
+      new TextDisplayBuilder()
+        .setContent("👇 **Choose an option below**")
+    )
+    .addActionRowComponents(
+      queueRow,
+      learningRow,
+      accountRow
+    );
+}
+
+static buildJoinQueueContainer(hasGif = true) {
+  const section = new SectionBuilder()
+    .addTextDisplayComponents(
+      new TextDisplayBuilder().setContent(
+        "# Choose a Platform\n\n" +
+        "> Select the service you want to join.\n" +
+        "> NexusAI will open the correct login flow for that platform."
+      )
+    );
+
+  if (hasGif) {
+    section.setThumbnailAccessory(
+      new ThumbnailBuilder({
+        media: {
+          url: "attachment://standard.gif"
+        }
+      })
+    );
   }
+
+  return new ContainerBuilder()
+    .setAccentColor(16032512)
+
+    .addSectionComponents(section)
+
+    .addSeparatorComponents(
+      new SeparatorBuilder()
+        .setSpacing(SeparatorSpacingSize.Small)
+        .setDivider(true)
+    )
+
+    .addTextDisplayComponents(
+      new TextDisplayBuilder().setContent(
+        "👇 **Select a platform below**\n" +
+        "> Each platform includes its own login and account connection flow."
+      )
+    )
+
+    .addActionRowComponents(
+      new ActionRowBuilder().addComponents(
+        new StringSelectMenuBuilder()
+          .setCustomId("platform_select")
+          .setPlaceholder("Select a Platform")
+
+          .addOptions(
+
+            // ====================================================
+            // SENTENCEBUILDERS
+            // ====================================================
+
+            new StringSelectMenuOptionBuilder()
+              .setLabel("SentenceBuilders")
+              .setDescription(
+                "Build language skills with vocabulary and sentence practice"
+              )
+              .setValue("join_sentenceBuilders")
+              .setEmoji({
+                id: "1541485141741019186",
+                name: "SentenceBuilders"
+              }),
+
+            // ====================================================
+            // BEDROCK
+            // ====================================================
+
+            new StringSelectMenuOptionBuilder()
+              .setLabel("Bedrock")
+              .setDescription(
+                "Improve English literacy, reading and vocabulary skills"
+              )
+              .setValue("join_bedrock")
+              .setEmoji({
+                id: "1529265581273124935",
+                name: "Bedrock"
+              }),
+
+            // ====================================================
+            // LANGUAGENUT
+            // ====================================================
+
+            new StringSelectMenuOptionBuilder()
+              .setLabel("LanguageNut")
+              .setDescription(
+                "Practise languages with interactive homework and activities"
+              )
+              .setValue("join_languagenut")
+              .setEmoji({
+                id: "1515672374878670858",
+                name: "LanguageNut"
+              }),
+
+            // ====================================================
+            // SPARX MATHS
+            // ====================================================
+
+            new StringSelectMenuOptionBuilder()
+              .setLabel("Sparx Maths")
+              .setDescription(
+                "Personalised maths homework, practice and revision"
+              )
+              .setValue("join_sparxMaths")
+              .setEmoji({
+                id: "1515672129188790302",
+                name: "SparxMaths"
+              }),
+
+            // ====================================================
+            // DRFROST
+            // ====================================================
+
+            new StringSelectMenuOptionBuilder()
+              .setLabel("DrFrost")
+              .setDescription(
+                "Maths homework, practice questions and revision"
+              )
+              .setValue("join_drfrost")
+              .setEmoji({
+                id: "1515671761448992809",
+                name: "DrFrost"
+              }),
+
+            // ====================================================
+            // MATHSWATCH
+            // ====================================================
+
+            new StringSelectMenuOptionBuilder()
+              .setLabel("MathsWatch")
+              .setDescription(
+                "Learn maths with videos, questions and assignments"
+              )
+              .setValue("join_mathswatch")
+              .setEmoji({
+                id: "1541488165460770906",
+                name: "MathsWatch"
+              }),
+
+            // ====================================================
+            // SPARX READER
+            // ====================================================
+
+            new StringSelectMenuOptionBuilder()
+              .setLabel("Sparx Reader")
+              .setDescription(
+                "Reading practice, comprehension and English skills"
+              )
+              .setValue("join_sparxReader")
+              .setEmoji({
+                id: "1515672202375204945",
+                name: "SparxReader"
+              }),
+
+            // ====================================================
+            // SPARX SCIENCE
+            // ====================================================
+
+            new StringSelectMenuOptionBuilder()
+              .setLabel("Sparx Science")
+              .setDescription(
+                "Personalised science homework, practice and revision"
+              )
+              .setValue("join_sparxScience")
+              .setEmoji({
+                id: "1515672274051797072",
+                name: "SparxScience"
+              }),
+
+            // ====================================================
+            // EDUCAKE
+            // ====================================================
+
+            new StringSelectMenuOptionBuilder()
+              .setLabel("Educake")
+              .setDescription(
+                "Science quizzes, homework and revision practice"
+              )
+              .setValue("join_educake")
+              .setEmoji({
+                id: "1515671948082806874",
+                name: "Educake"
+              }),
+
+            // ====================================================
+            // TASSOMAI
+            // ====================================================
+
+            new StringSelectMenuOptionBuilder()
+              .setLabel("Tassomai")
+              .setDescription(
+                "Daily revision, knowledge checks and exam preparation"
+              )
+              .setValue("join_tassomai")
+              .setEmoji({
+                id: "1541487443927113798",
+                name: "Tassomai"
+              }),
+
+            // ====================================================
+            // CENTURY
+            // ====================================================
+
+            new StringSelectMenuOptionBuilder()
+              .setLabel("Century")
+              .setDescription(
+                "Personalised learning, revision and targeted practice"
+              )
+              .setValue("join_century")
+              .setEmoji({
+                id: "1541487877685383398",
+                name: "Century"
+              }),
+
+            // ====================================================
+            // CAROUSEL
+            // ====================================================
+
+            new StringSelectMenuOptionBuilder()
+              .setLabel("Carousel")
+              .setDescription(
+                "Interactive lessons, assignments and revision activities"
+              )
+              .setValue("join_carousel")
+              .setEmoji({
+                id: "1541487306677035139",
+                name: "Carousel"
+              }),
+
+            // ====================================================
+            // SENECA
+            // ====================================================
+
+            new StringSelectMenuOptionBuilder()
+              .setLabel("Seneca")
+              .setDescription(
+                "Revision courses, learning activities and exam preparation"
+              )
+              .setValue("join_seneca")
+              .setEmoji({
+                id: "1515672492512120963",
+                name: "Seneca"
+              })
+          )
+      )
+    );
+}
+
+
+
+  static buildQueuePlatformContainer() {
+  return new ContainerBuilder()
+    .setAccentColor(16032512)
+    .addTextDisplayComponents(
+      new TextDisplayBuilder().setContent(
+        "# 🥭 NexusAI Learning Platform\n\n" +
+        "> Select an action below to manage your learning queue.\n\n" +
+        "Choose what you want to do:"
+      )
+    )
+    .addSeparatorComponents(
+      new SeparatorBuilder()
+        .setSpacing(SeparatorSpacingSize.Small)
+        .setDivider(true)
+    )
+    .addActionRowComponents(
+      new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId("queue_join")
+          .setLabel("Join Queue")
+          .setStyle(ButtonStyle.Primary),
+
+        new ButtonBuilder()
+          .setCustomId("queue_saved")
+          .setLabel("Saved Accounts")
+          .setStyle(ButtonStyle.Secondary),
+
+        new ButtonBuilder()
+          .setCustomId("queue_group")
+          .setLabel("Group Queue")
+          .setStyle(ButtonStyle.Secondary)
+      )
+    )
+    .addActionRowComponents(
+      new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId("queue_check")
+          .setLabel("Check Queue")
+          .setStyle(ButtonStyle.Secondary),
+
+        new ButtonBuilder()
+          .setCustomId("queue_slots")
+          .setLabel("View Slots")
+          .setStyle(ButtonStyle.Secondary),
+
+        new ButtonBuilder()
+          .setCustomId("queue_history")
+          .setLabel("History")
+          .setStyle(ButtonStyle.Secondary)
+      )
+    )
+    .addActionRowComponents(
+      new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId("queue_settings")
+          .setLabel("Settings")
+          .setStyle(ButtonStyle.Secondary),
+
+        new ButtonBuilder()
+          .setCustomId("queue_tutorials")
+          .setLabel("Tutorials")
+          .setStyle(ButtonStyle.Secondary),
+
+        new ButtonBuilder()
+          .setCustomId("queue_feedback")
+          .setLabel("Feedback")
+          .setStyle(ButtonStyle.Secondary)
+      )
+    );
+}
+
+  static buildSupportContainer() {
+  const container = new ContainerBuilder()
+    .setAccentColor(0xED4245)
+    .addTextDisplayComponents(
+      new TextDisplayBuilder().setContent(
+        "# 🥭 NexusAI Support Center\n\n" +
+        "> Need help with NexusAI?\n" +
+        "> Create a support ticket and our team will assist you.\n\n" +
+        "### 🎫 Support\n" +
+        "• Private support tickets\n" +
+        "• Account assistance\n" +
+        "• Bug reports\n" +
+        "• General help"
+      )
+    )
+    .addSeparatorComponents(
+      new SeparatorBuilder()
+        .setSpacing(SeparatorSpacingSize.Small)
+        .setDivider(true)
+    )
+    .addTextDisplayComponents(
+      new TextDisplayBuilder().setContent(
+        "👇 **Choose an option below**"
+      )
+    )
+    .addActionRowComponents(
+      new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId("support_create")
+          .setLabel("Create Ticket")
+          .setEmoji({ name: "🎫" })
+          .setStyle(ButtonStyle.Primary),
+
+        new ButtonBuilder()
+          .setCustomId("support_status")
+          .setLabel("Ticket Status")
+          .setEmoji({ name: "📊" })
+          .setStyle(ButtonStyle.Secondary)
+      )
+    );
+
+  return container;
+}
 
   static buildScheduleContainer() {
   return new ContainerBuilder()
     .setAccentColor(0x5865F2)
     .addTextDisplayComponents(
       new TextDisplayBuilder().setContent(
-        "# 🗓️ MangoAI Auto Schedule\n\n" +
+        "# 🗓️ NexusAI Auto Schedule\n\n" +
         "> Create automatic homework reminders.\n" +
         "> Keep your homework running automatically.\n\n" +
         "Use the button below to manage your schedules."
@@ -504,7 +932,7 @@ export class ScheduleEmbedFactory {
   static buildScheduleEmbed() {
     return new EmbedBuilder()
       .setColor('#5865F2')
-      .setTitle('🥭 MangoAI • Auto Schedule')
+      .setTitle('🥭 NexusAI • Auto Schedule')
       .setDescription(
         'Create automatic homework reminders and manage your learning routine.'
       )
@@ -523,7 +951,7 @@ export class ScheduleEmbedFactory {
         }
       )
       .setFooter({
-        text: '🥭 MangoAI • Smart Scheduling'
+        text: '🥭 NexusAI • Smart Scheduling'
       })
       .setTimestamp();
   }
@@ -534,7 +962,7 @@ export class SupportEmbedFactory {
   static buildSupportEmbed() {
     return new EmbedBuilder()
       .setColor('#ED4245')
-      .setTitle('🥭 MangoAI • Support Center')
+      .setTitle('🥭 NexusAI • Support Center')
       .setDescription(
         'Need help? Create a support ticket and our team will assist you.'
       )
@@ -551,7 +979,7 @@ export class SupportEmbedFactory {
         }
       )
       .setFooter({
-        text: '🥭 MangoAI Support'
+        text: '🥭 NexusAI Support'
       })
       .setTimestamp();
   }

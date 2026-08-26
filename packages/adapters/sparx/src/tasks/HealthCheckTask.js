@@ -1,4 +1,4 @@
-export class HealthCheckTask {
+﻿export class HealthCheckTask {
   constructor(client) {
     this.client = client;
   }
@@ -9,3 +9,4 @@ export class HealthCheckTask {
 }
 
 export default HealthCheckTask;
+

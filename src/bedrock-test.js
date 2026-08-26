@@ -19,7 +19,7 @@ try {
           role: "user",
           content: [
             {
-              text: "Say hello from MangoAI V2"
+              text: "Say hello from NexusAI V2"
             }
           ]
         }
@@ -38,6 +38,6 @@ try {
   );
 
 } catch (error) {
-  console.error("❌ Bedrock error:");
+  console.error("âŒ Bedrock error:");
   console.error(error.message);
 }

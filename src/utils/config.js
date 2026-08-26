@@ -2,107 +2,332 @@ import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-dotenv.config({ path: path.join(__dirname, '../../.env') });
-
-console.log(
-  "ENV PATH:",
-  path.join(__dirname, '../../.env')
+const __dirname = path.dirname(
+  fileURLToPath(import.meta.url)
 );
 
-console.log(
-  "TOKEN:",
-  process.env.DISCORD_TOKEN ? "FOUND" : "MISSING"
-);
+dotenv.config({
+  path: path.join(__dirname, '../../.env')
+});
 
 export const config = {
-  // Discord
+  // ==========================================================
+  // DISCORD
+  // ==========================================================
+
   discord: {
-    token: process.env.DISCORD_TOKEN || '',
-    prefix: process.env.DISCORD_PREFIX || '!',
+    token:
+      process.env.DISCORD_TOKEN || '',
+
+    prefix:
+      process.env.DISCORD_PREFIX || '!',
+
     channels: {
-      learningPlatform: process.env.DISCORD_CHANNEL_LEARNING_ID || process.env.DISCORD_CHANNEL_HOMEWORK_ID || '',
-      autoSchedule: process.env.DISCORD_CHANNEL_SCHEDULE_ID || '',
-      supportTickets: process.env.DISCORD_CHANNEL_SUPPORT_ID || '',
-      pastPapers: process.env.DISCORD_CHANNEL_PAST_PAPERS_ID || '',
-      homework: process.env.DISCORD_CHANNEL_HOMEWORK_ID || process.env.DISCORD_CHANNEL_LEARNING_ID || '',
+      learningPlatform:
+        process.env.DISCORD_CHANNEL_LEARNING_ID ||
+        process.env.DISCORD_CHANNEL_HOMEWORK_ID ||
+        '',
+
+      autoSchedule:
+        process.env.DISCORD_CHANNEL_SCHEDULE_ID ||
+        '',
+
+      supportTickets:
+        process.env.DISCORD_CHANNEL_SUPPORT_ID ||
+        '',
+
+      pastPapers:
+        process.env.DISCORD_CHANNEL_PAST_PAPERS_ID ||
+        '',
+
+      homework:
+        process.env.DISCORD_CHANNEL_HOMEWORK_ID ||
+        process.env.DISCORD_CHANNEL_LEARNING_ID ||
+        '',
     },
   },
 
-  // AWS Bedrock
+  // ==========================================================
+  // VERIFICATION
+  // ==========================================================
+
+  verification: {
+    enabled:
+      process.env.VERIFICATION_ENABLED === 'true',
+
+    channelId:
+      process.env.VERIFICATION_CHANNEL_ID || '',
+
+    roleId:
+      process.env.VERIFICATION_ROLE_ID || '',
+
+    timeoutMs:
+      parseInt(
+        process.env.VERIFICATION_TIMEOUT_MS ||
+          '300000',
+        10
+      ),
+
+    maxAttempts:
+      parseInt(
+        process.env.VERIFICATION_MAX_ATTEMPTS ||
+          '3',
+        10
+      ),
+  },
+
+  // ==========================================================
+  // AWS BEDROCK
+  // ==========================================================
+
   bedrock: {
-    region: process.env.AWS_REGION || 'us-east-1',
-    modelId: process.env.BEDROCK_MODEL_ID || 'anthropic.claude-3-haiku-20240307-v1:0',
+    region:
+      process.env.AWS_REGION ||
+      'us-east-1',
+
+    modelId:
+      process.env.BEDROCK_MODEL_ID ||
+      'anthropic.claude-3-haiku-20240307-v1:0',
   },
 
-  // Redis
+  // ==========================================================
+  // REDIS
+  // ==========================================================
+
   redis: {
-    url: process.env.REDIS_URL || 'redis://localhost:6379',
+    url:
+      process.env.REDIS_URL ||
+      'redis://localhost:6379',
   },
 
-  // Logging
+  // ==========================================================
+  // LOGGING
+  // ==========================================================
+
   logging: {
-    level: process.env.LOG_LEVEL || 'info',
-    file: process.env.LOG_FILE || 'logs/app.log',
+    level:
+      process.env.LOG_LEVEL ||
+      'info',
+
+    file:
+      process.env.LOG_FILE ||
+      'logs/app.log',
   },
 
-  // Features
+  // ==========================================================
+  // FEATURES
+  // ==========================================================
+
   features: {
-    autoSolve: process.env.ENABLE_AUTO_SOLVE === 'true',
-    persistSessions: process.env.ENABLE_SESSION_PERSISTENCE === 'true',
-    maxConcurrentTasks: parseInt(process.env.MAX_CONCURRENT_TASKS || '5'),
-    taskTimeout: parseInt(process.env.TASK_TIMEOUT || '300000'),
+    autoSolve:
+      process.env.ENABLE_AUTO_SOLVE === 'true',
+
+    persistSessions:
+      process.env.ENABLE_SESSION_PERSISTENCE === 'true',
+
+    refreshStartupChannels:
+      process.env.REFRESH_STARTUP_CHANNELS === 'true',
+
+    maxConcurrentTasks:
+      parseInt(
+        process.env.MAX_CONCURRENT_TASKS || '5',
+        10
+      ),
+
+    taskTimeout:
+      parseInt(
+        process.env.TASK_TIMEOUT || '300000',
+        10
+      ),
   },
 
-  // Platform Credentials
+  // ==========================================================
+  // PLATFORM CREDENTIALS
+  // ==========================================================
+
   platforms: {
     sparx: {
-  username: '',
-  password: '',
-  type: 'Normal',
-},
+      username: '',
+      password: '',
+      type: 'Normal',
+    },
+
     educake: {
-      email: process.env.EDUCAKE_EMAIL || '',
-      password: process.env.EDUCAKE_PASSWORD || '',
+      email:
+        process.env.EDUCAKE_EMAIL || '',
+
+      password:
+        process.env.EDUCAKE_PASSWORD || '',
     },
+
     drfrost: {
-      email: process.env.DRFROST_EMAIL || '',
-      password: process.env.DRFROST_PASSWORD || '',
+      email:
+        process.env.DRFROST_EMAIL || '',
+
+      password:
+        process.env.DRFROST_PASSWORD || '',
     },
+
     seneca: {
-      email: process.env.SENECA_EMAIL || '',
-      password: process.env.SENECA_PASSWORD || '',
+      email:
+        process.env.SENECA_EMAIL || '',
+
+      password:
+        process.env.SENECA_PASSWORD || '',
     },
+
     languagenut: {
-      email: process.env.LANGUAGENUT_EMAIL || '',
-      password: process.env.LANGUAGENUT_PASSWORD || '',
+      email:
+        process.env.LANGUAGENUT_EMAIL || '',
+
+      password:
+        process.env.LANGUAGENUT_PASSWORD || '',
     },
+
     mango: {
-      id: process.env.MANGO_LEARNING_PLATFORM_ID || '',
-      name: process.env.MANGO_LEARNING_PLATFORM_NAME || '',
+      id:
+        process.env.MANGO_LEARNING_PLATFORM_ID ||
+        '',
+
+      name:
+        process.env.MANGO_LEARNING_PLATFORM_NAME ||
+        '',
     },
   },
 
-  // API Keys
+  // ==========================================================
+  // API KEYS
+  // ==========================================================
+
   apiKeys: {
-    gemini: process.env.GEMINI_API_KEY || '',
-    openai: process.env.OPENAI_API_KEY || '',
+    gemini:
+      process.env.GEMINI_API_KEYS?.split(',') || [process.env.GEMINI_API_KEY || ''],
+
+    openai:
+      process.env.OPENAI_API_KEY || '',
   },
 };
+
+// ============================================================
+// CONFIG VALIDATION
+// ============================================================
 
 export function validateConfig() {
   const errors = [];
 
+  // ----------------------------------------------------------
+  // Discord
+  // ----------------------------------------------------------
+
   if (!config.discord.token) {
-    errors.push('DISCORD_TOKEN is required');
+    errors.push(
+      'DISCORD_TOKEN is required'
+    );
   }
 
-  if (config.features.autoSolve && !config.bedrock.region) {
-    errors.push('AWS_REGION is required for auto-solve feature');
+  // ----------------------------------------------------------
+  // Verification
+  // ----------------------------------------------------------
+
+  if (
+    config.verification.enabled &&
+    !config.verification.channelId
+  ) {
+    errors.push(
+      'VERIFICATION_CHANNEL_ID is required when verification is enabled'
+    );
   }
+
+  if (
+    config.verification.enabled &&
+    !config.verification.roleId
+  ) {
+    errors.push(
+      'VERIFICATION_ROLE_ID is required when verification is enabled'
+    );
+  }
+
+  // ----------------------------------------------------------
+  // Verification timeout
+  // ----------------------------------------------------------
+
+  if (
+    !Number.isFinite(
+      config.verification.timeoutMs
+    ) ||
+    config.verification.timeoutMs <= 0
+  ) {
+    errors.push(
+      'VERIFICATION_TIMEOUT_MS must be a positive number'
+    );
+  }
+
+  // ----------------------------------------------------------
+  // Verification attempts
+  // ----------------------------------------------------------
+
+  if (
+    !Number.isInteger(
+      config.verification.maxAttempts
+    ) ||
+    config.verification.maxAttempts < 1
+  ) {
+    errors.push(
+      'VERIFICATION_MAX_ATTEMPTS must be an integer greater than 0'
+    );
+  }
+
+  // ----------------------------------------------------------
+  // Auto-solve
+  // ----------------------------------------------------------
+
+  if (
+    config.features.autoSolve &&
+    !config.bedrock.region
+  ) {
+    errors.push(
+      'AWS_REGION is required for auto-solve feature'
+    );
+  }
+
+  // ----------------------------------------------------------
+  // Concurrent tasks
+  // ----------------------------------------------------------
+
+  if (
+    !Number.isInteger(
+      config.features.maxConcurrentTasks
+    ) ||
+    config.features.maxConcurrentTasks < 1
+  ) {
+    errors.push(
+      'MAX_CONCURRENT_TASKS must be an integer greater than 0'
+    );
+  }
+
+  // ----------------------------------------------------------
+  // Task timeout
+  // ----------------------------------------------------------
+
+  if (
+    !Number.isInteger(
+      config.features.taskTimeout
+    ) ||
+    config.features.taskTimeout <= 0
+  ) {
+    errors.push(
+      'TASK_TIMEOUT must be a positive integer'
+    );
+  }
+
+  // ----------------------------------------------------------
+  // Final validation
+  // ----------------------------------------------------------
 
   if (errors.length > 0) {
-    throw new Error(`Configuration validation failed:\n${errors.join('\n')}`);
+    throw new Error(
+      `Configuration validation failed:\n${errors.join('\n')}`
+    );
   }
 
   return true;

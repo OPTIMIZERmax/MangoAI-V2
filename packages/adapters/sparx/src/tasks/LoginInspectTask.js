@@ -1,4 +1,4 @@
-export class LoginInspectTask {
+﻿export class LoginInspectTask {
   constructor(client) {
     this.client = client;
   }
@@ -53,3 +53,4 @@ export class LoginInspectTask {
 }
 
 export default LoginInspectTask;
+

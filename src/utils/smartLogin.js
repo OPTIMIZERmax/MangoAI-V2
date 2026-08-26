@@ -1,5 +1,7 @@
+import fs from "node:fs/promises";
+
 // --- Configuration ---
-const DEFAULT_TIMEOUT = 2000;
+const DEFAULT_TIMEOUT = 10000; // 10 seconds
 
 async function isElementVisible(page, selector) {
     try {
@@ -13,10 +15,25 @@ async function isElementVisible(page, selector) {
 async function smartLogin(page, email, password, loginType = 'Normal', landedFunction, logFn = () => { }) {
     const log = (msg) => logFn(`[SmartLogin][${loginType}] ${msg}`);
 
+    log(`STARTED. Current URL: ${page.url()}`);
+
     page.setDefaultTimeout(DEFAULT_TIMEOUT);
 
-    const EMAIL_SELECTORS = ['input[name="loginfmt"]', 'input[type="email"]', 'input[name="identifier"]', '#i0116', '#Email'].join(',');
-    const PASSWORD_SELECTORS = ['input[name="passwd"]', 'input[name="Passwd"]', 'input[type="password"]', '#i0118'].join(',');
+    const EMAIL_SELECTORS = [
+    'input[name="loginfmt"]',
+    'input[type="email"]',
+    'input[name="identifier"]',
+    '#i0116',
+    '#Email',
+    'input[autocomplete="username"]'
+].join(',');
+    const PASSWORD_SELECTORS = [
+    'input[name="passwd"]',
+    'input[name="Passwd"]',
+    'input[type="password"]',
+    '#i0118',
+    'input[autocomplete="current-password"]'
+].join(',');
     
     /*
     const TWO_FACTOR_SELECTORS = ['input[name="otc"]', '#idTxtBx_SAOTCC_OTC', 'input[name="code"]', '#idTxtBx_SMSOTP_OTC'].join(',');
@@ -27,11 +44,16 @@ async function smartLogin(page, email, password, loginType = 'Normal', landedFun
     
     // Note: Puppeteer's ::-p-text() was replaced with Playwright's :has-text()
     const SUBMIT_BUTTONS = [
-        '#idSIButton9', '#identifierNext', '#passwordNext', '#submit',
-        'button[type="submit"]', 'button[id*="Next"]',
-        '#identity-provider-linking-continue',
-        'span:has-text("Continue")' 
-    ].join(',');
+    '#idSIButton9',
+    '#identifierNext',
+    '#passwordNext',
+    '#submit',
+    '#idSubmit_ProofUp_Redirect',
+    'button[type="submit"]',
+    'button[id*="Next"]',
+    '#identity-provider-linking-continue',
+    'span:has-text("Continue")'
+].join(',');
 
     const ERROR_INDICATORS = ['#usernameError', '#passwordError', 'div[aria-live="assertive"]', '.error', '.text-danger'].join(',');
 
@@ -47,27 +69,180 @@ async function smartLogin(page, email, password, loginType = 'Normal', landedFun
 
     const ALL_INTERACTIVE = `${EMAIL_SELECTORS},${PASSWORD_SELECTORS},${SUBMIT_BUTTONS}`;
 
-    for (let attempt = 0; attempt < 25; attempt++) {
+    for (let attempt = 0; attempt < 120; attempt++) {
         const url = page.url();
+        const safeUrl = (() => {
+    try {
+        const u = new URL(url);
+        return `${u.origin}${u.pathname}`;
+    } catch {
+        return url.split("?")[0];
+    }
+})();
 
-        // 1. Success Check
-        if (landedFunction({ url, page })) return { filledEmail, filledPassword };
+log(`Current URL: ${safeUrl}`);
 
-        // 2. Navigation State Reset
-        if (url !== lastUrl) {
-            log(`Navigated: ${url.substring(0, 40)}...`);
-            lastUrl = url;
-            filledPassword = false; // Reset password state on navigation
-        }
+        if (url.includes("login.microsoftonline.com/common/login")) {
+        await page.screenshot({
+    path: "microsoft-login-debug.png",
+    fullPage: true
+});
 
-        try { 
-            await page.locator(ALL_INTERACTIVE).first().waitFor({ state: 'visible', timeout: 500 }); 
-        } catch (_error) {
+await fs.writeFile(
+    "microsoft-login-debug.html",
+    await page.content(),
+    "utf8"
+);
+    try {
+        const debug = await page.locator("input").evaluateAll(elements =>
+            elements.map(input => ({
+                type: input.type,
+                name: input.name,
+                id: input.id,
+                placeholder: input.placeholder,
+                autocomplete: input.autocomplete,
+                ariaLabel: input.getAttribute("aria-label")
+            }))
+        );
+
+        log(`Microsoft inputs: ${JSON.stringify(debug)}`);
+
+        const buttons = await page.locator("button").evaluateAll(elements =>
+            elements.map(button => ({
+                text: button.innerText,
+                id: button.id,
+                type: button.type,
+                ariaLabel: button.getAttribute("aria-label")
+            }))
+        );
+
+        log(`Microsoft buttons: ${JSON.stringify(buttons)}`);
+    } catch (error) {
+        log(`DEBUG INSPECTION FAILED: ${error.message}`);
+    }
+}
+
+// 1. Microsoft security registration MUST be handled before success detection
+const isMicrosoftRegistration =
+    url.includes('mysignins.microsoft.com/register') ||
+    url.includes('mysignins.microsoft.com/api/post/registerSsprMethodsInterrupt');
+
+if (isMicrosoftRegistration) {
+    log('Microsoft security registration page detected.');
+
+    try {
+        const skipSetup = page.getByRole('button', {
+            name: 'Skip setup',
+            exact: true
+        }).first();
+
+        await skipSetup.waitFor({
+            state: 'visible',
+            timeout: 10000
+        });
+
+        log('Microsoft "Skip setup" button detected.');
+        log('Clicking Microsoft "Skip setup"...');
+
+        await skipSetup.click({
+            force: true,
+            timeout: 5000
+        });
+
+        log('Microsoft "Skip setup" clicked.');
+
+        await page.waitForLoadState('domcontentloaded', {
+            timeout: 10000
+        }).catch(() => {});
+
+        await page.waitForTimeout(1500).catch(() => {});
+
+        log(`After "Skip setup": ${page.url()}`);
+
+        filledEmail = false;
+        filledPassword = false;
+        lastUrl = page.url();
+
+        continue;
+
+    } catch (error) {
+        log(`Skip setup handling failed: ${error.message}`);
+        await page.waitForTimeout(1000).catch(() => {});
+        continue;
+    }
+}
+
+// 2. Success Check
+if (landedFunction({ url, page })) {
+    return { filledEmail, filledPassword };
+}
+
+// 3. Navigation State Reset
+if (url !== lastUrl) {
+    log(`Navigated: ${url.substring(0, 40)}...`);
+    lastUrl = url;
+    filledPassword = false;
+}
+
+try {
+    await page.locator(ALL_INTERACTIVE).first().waitFor({
+        state: 'visible',
+        timeout: 3000
+    });
+} catch (_error) {
     // Ignore timeout
 }
 
-        // 4. Speedbump Handling
-        if (url.includes('samlconfirmaccount') || url.includes('speedbump')) {
+// 3. Microsoft Proof-Up / Security Registration
+if (
+    url.includes('login.microsoftonline.com/common/login') &&
+    await page.locator('#idSubmit_ProofUp_Redirect').count()
+) {
+    log('Microsoft security-registration page detected.');
+
+    try {
+        const proofUpButton = page.locator('#idSubmit_ProofUp_Redirect').first();
+
+        if (await proofUpButton.isVisible({ timeout: 3000 }).catch(() => false)) {
+            log('Microsoft Proof-Up "Next" button detected.');
+            log('Clicking Microsoft Proof-Up "Next"...');
+
+            await proofUpButton.click({ force: true });
+
+            log('Proof-Up "Next" clicked. Waiting for Microsoft registration flow...');
+
+            // Give Microsoft time to perform the redirect/navigation.
+            await page.waitForLoadState('domcontentloaded', {
+                timeout: 10000
+            }).catch(() => {});
+
+            await page.waitForTimeout(1500);
+
+            log(`After Proof-Up Next: ${page.url()}`);
+
+            // Reset state because Microsoft may have navigated
+            // to a completely different authentication page.
+            filledEmail = false;
+            filledPassword = false;
+            lastUrl = page.url();
+
+            continue;
+        }
+
+        log('Proof-Up "Next" button is not visible yet.');
+
+        await page.waitForTimeout(1000);
+        continue;
+
+    } catch (error) {
+        log(`Proof-Up handling failed: ${error.message}`);
+        await page.waitForTimeout(1000);
+        continue;
+    }
+}
+
+// 5. Speedbump Handling
+if (url.includes('samlconfirmaccount') || url.includes('speedbump')) {
             log(`Speedbump page detected.`);
             try {
                 const continueBtn = page.locator('#identity-provider-linking-continue, span:has-text("Continue")').first();
@@ -205,28 +380,43 @@ async function smartLogin(page, email, password, loginType = 'Normal', landedFun
         */
 
         // 7. Handle Email
-        if (!filledEmail) {
-            try {
-                const emailLoc = page.locator(EMAIL_SELECTORS).first();
-                if (await emailLoc.isVisible()) {
-                    const currentVal = await emailLoc.inputValue();
-                    if (currentVal !== email) {
-                        log(`Typing Email...`);
-                        
-                        // Playwright's `fill` natively clears existing text and inputs new text seamlessly
-                        await emailLoc.fill(email);
-                        filledEmail = true;
-                        
-                        await page.keyboard.press('Enter');
-                        continue;
-                    } else {
-                        filledEmail = true;
-                    }
-                }
-            } catch (_error) {
-    // Ignore email input errors
-}   
+        // 7. Handle Email
+if (!filledEmail) {
+    try {
+        const emailLoc = page.locator(EMAIL_SELECTORS).first();
+
+        if (await emailLoc.isVisible()) {
+            log('Email field detected.');
+
+            await emailLoc.click({ force: true });
+
+            // Clear whatever Microsoft has placed in the field.
+            await emailLoc.fill('');
+
+            log(`Filling email: ${email}`);
+
+            await emailLoc.fill(email);
+
+            // Verify that Playwright actually entered it.
+            const enteredEmail = await emailLoc.inputValue();
+
+            log(`Email field now contains: ${enteredEmail}`);
+
+            if (enteredEmail.trim().toLowerCase() === email.trim().toLowerCase()) {
+                filledEmail = true;
+                log('Email successfully filled.');
+            } else {
+                log('WARNING: Email field did not contain the expected email.');
+            }
+
+            // Do NOT press Enter here yet.
+            // Let the submit-button section handle Microsoft's Next button.
+            continue;
         }
+    } catch (error) {
+        log(`Email handling error: ${error.message}`);
+    }
+}
 
         // 8. Handle Password
         if (filledEmail && !filledPassword) {

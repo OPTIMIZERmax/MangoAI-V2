@@ -1,4 +1,4 @@
-import { AdapterRegistry } from "@mango/engine";
+﻿import { AdapterRegistry } from "@mango/engine";
 import { SparxAdapter } from "./src/SparxAdapter.js";
 
 const registry = new AdapterRegistry();
@@ -26,3 +26,4 @@ const result = await registry.execute(
 console.log(result);
 
 await sparx.shutdown();
+

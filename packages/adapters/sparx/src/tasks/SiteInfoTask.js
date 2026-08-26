@@ -1,4 +1,4 @@
-export class SiteInfoTask {
+﻿export class SiteInfoTask {
   constructor(client) {
     this.client = client;
   }
@@ -9,3 +9,4 @@ export class SiteInfoTask {
 }
 
 export default SiteInfoTask;
+

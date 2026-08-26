@@ -1,4 +1,4 @@
-import { test, expect } from "@jest/globals";
+﻿import { test, expect } from "@jest/globals";
 
 import { LoginTask } from "../src/tasks/LoginTask.js";
 import { SparxClient } from "../src/services/SparxClient.js";
@@ -27,11 +27,11 @@ test("LoginTask returns success when the helper flow completes", async () => {
     },
     async isLoggedIn() {
       calls.push("isLoggedIn");
-      return true;
+      return calls.filter(call => call === "isLoggedIn").length > 1;
     }
   };
 
-  const task = new LoginTask(client);
+  const task = new LoginTask(client, { async saveSession() {} });
   const result = await task.execute({
     school: "Test School",
     username: "student",
@@ -45,6 +45,7 @@ test("LoginTask returns success when the helper flow completes", async () => {
 });
 
   expect(calls).toEqual([
+  "isLoggedIn",
   "goToLogin",
   "searchSchool:Test School",
   "selectSchool",
@@ -94,7 +95,7 @@ test("LoginTask reports invalid credentials when the session is not established"
 });
 });
 
-test("SparxClient selectSchool works without requiring a school argument", async () => {
+test("SparxClient selects the requested school", async () => {
   const page = {
     async waitForLoadState() {},
     async waitForTimeout() {},
@@ -107,22 +108,35 @@ test("SparxClient selectSchool works without requiring a school argument", async
     })
   };
 },
-    getByRole() {
-  return {
-    count: async () => 1,
-    waitFor: async () => {},
-    click: async () => {}
-  };
-}
+    getByRole(role, options = {}) {
+      if (role === "button" && !options.name) {
+        return {
+          count: async () => 0
+        };
+      }
+
+      return {
+        first: () => ({
+          waitFor: async () => {},
+          click: async () => {}
+        })
+      };
+    },
+    url: () => "https://maths.sparx-learning.com/student/login",
+    title: async () => "Sparx Login"
   };
 
   const client = new SparxClient({
     getPage: () => page
   });
 
-  const result = await client.selectSchool();
+  const result = await client.selectSchool("Test School");
 
   expect(result).toEqual({
-  success: true
+    success: true,
+    schoolSelected: "Test School",
+    url: "https://maths.sparx-learning.com/student/login"
+  });
 });
-});
+
+

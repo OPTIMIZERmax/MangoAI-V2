@@ -1,0 +1,1525 @@
+/* eslint-env node */
+
+import {
+  Client,
+  GatewayIntentBits,
+  Partials,
+  EmbedBuilder,
+  ActivityType,
+  AttachmentBuilder,
+  MessageFlags,
+  ModalBuilder,
+  TextInputBuilder,
+  TextInputStyle,
+  ActionRowBuilder,
+  StringSelectMenuBuilder,
+  ButtonBuilder,
+  ButtonStyle,
+  ChannelType,
+  PermissionFlagsBits,
+} from 'discord.js';
+
+import {
+  ContainerFactory,
+  EmbedFactory,
+  ActionRowFactory
+} from './embedFactory.js';
+
+import logger from '../utils/logger.js';
+import config from '../utils/config.js';
+import { dispatchSparxLogin } from './sparxLoginBridge.js';
+
+import path from 'path';
+import fs from 'fs';
+import { fileURLToPath } from 'url';
+
+const __dirname = path.dirname(
+  fileURLToPath(import.meta.url)
+);
+
+export class DiscordBot {
+  constructor() {
+    this.client = new Client({
+      intents: [
+        GatewayIntentBits.Guilds,
+        GatewayIntentBits.GuildMessages,
+        GatewayIntentBits.DirectMessages,
+        GatewayIntentBits.MessageContent,
+        GatewayIntentBits.GuildPresences
+      ]
+    });
+
+    this.commandHandler = null;
+    this.activeSessions = new Map();
+    this.app = null;
+    this.platformService = null;
+    this.scheduleLoop = null;
+    this.presenceInterval = null;
+    this.pendingLogins = new Map();
+
+    this.setupEventHandlers();
+  }
+
+  setCommandHandler(handler) {
+    this.commandHandler = handler;
+  }
+
+  setApp(app) {
+  this.app = app;
+}
+
+setPlatformService(platformService) {
+  this.platformService = platformService;
+}
+
+setLoginService(loginService) {
+  this.loginService = loginService;
+}
+
+  setupEventHandlers() {
+
+  this.client.once('clientReady', () => {
+    logger.info(
+      { username: this.client.user.username },
+      'Discord bot is ready'
+    );
+
+    this.setPresence();
+  });
+
+
+  this.client.on('interactionCreate', async (interaction) => {
+
+  console.log(
+    "Type:",
+    interaction.isButton(),
+    interaction.isStringSelectMenu(),
+    interaction.customId
+  );  
+
+  console.log(
+    "🔥 INTERACTION RECEIVED:",
+    interaction.type,
+    interaction.customId
+  );
+
+  try {
+
+    if (interaction.isButton()) {
+      return this.handleButtonInteraction(interaction);
+    }
+
+    if (interaction.isStringSelectMenu()) {
+      return this.handleSelectMenuInteraction(interaction);
+    }
+
+    if (interaction.isModalSubmit()) {
+
+      if (interaction.customId.startsWith('school_login_')) {
+        return this.handleLoginModal(interaction);
+      }
+
+      if (interaction.customId.startsWith('cookie_login_')) {
+        return this.handleCookieModalSubmit(interaction);
+      }
+
+    }
+
+  } catch (error) {
+
+    logger.error(
+      {
+        error: error.message,
+        customId: interaction.customId
+      },
+      'Interaction handler failed'
+    );
+
+  }
+
+});
+
+
+  this.client.on('messageCreate', async (message) => {
+    if (message.author.bot) return;
+
+    // your existing message code
+  });
+
+
+  this.client.on('error', (error) => {
+  console.error('========== DISCORD CLIENT ERROR ==========');
+  console.error('MESSAGE:', error?.message);
+  console.error('NAME:', error?.name);
+  console.error('CODE:', error?.code);
+  console.error('STATUS:', error?.status);
+  console.error('STACK:', error?.stack);
+  console.error('FULL ERROR:', error);
+  console.error('==========================================');
+
+  logger.error(
+    {
+      message: error?.message,
+      name: error?.name,
+      code: error?.code,
+      status: error?.status,
+      stack: error?.stack
+    },
+    'Discord client error'
+  );
+});
+
+    this.client.on('messageCreate', async (message) => {
+      if (message.author.bot) return;
+
+      /* ==================================
+         SENAI PLATFORM CHANNELS
+         ================================== */
+      const platformChannels = {
+        "sparx-maths": "sparxMaths",
+        "science-reader": "science",
+        "educake": "educake",
+        "drfrost": "drfrost",
+        "seneca": "seneca",
+        "languagenut": "languagenut"
+      };
+
+      const platform = platformChannels[message.channel.name];
+      if (platform) {
+        return this.handlePlatformQuestion(message, platform);
+      }
+
+      /* ==================================
+         PREFIX COMMANDS
+         ================================== */
+      if (!message.content.startsWith(config.discord.prefix)) return;
+
+      const args = message.content
+        .slice(config.discord.prefix.length)
+        .trim()
+        .split(/ +/);
+
+      const command = args.shift()?.toLowerCase();
+      if (!command) return;
+
+      try {
+        await this.handleCommand(command, args, message);
+      } catch (error) {
+        logger.error(
+          { error: error.message, command },
+          'Error handling command'
+        );
+
+        await this.replyToChannel(message, {
+          content: `❌ ${error.message}`
+        });
+      }
+    });
+
+    this.client.on('error', (error) => {
+      logger.error({ error: error.message }, 'Discord client error');
+    });
+  }
+
+  async handlePlatformQuestion(message, platform) {
+    const question = message.content.trim();
+    if (!question) return;
+
+    const embed = new EmbedBuilder()
+      .setColor('#5865F2')
+      .setTitle('🥭 NexusAI • Question Received')
+      .addFields(
+        { name: 'Platform', value: platform, inline: true },
+        { name: 'Student', value: message.author.username, inline: true },
+        { name: 'Question', value: question }
+      )
+      .setTimestamp()
+      .setFooter({ text: 'NexusAI Learning Platform' });
+
+    await message.channel.send({ embeds: [embed] });
+  }
+
+async showLoginTypeMenu(interaction, platform) {
+  const embed = new EmbedBuilder()
+    .setColor("#F4A300")
+    .setAuthor({
+      name: "🥭 NexusAI",
+    })
+    .setTitle("🔐  Choose Your Login Method")
+    .setDescription(
+      [
+        `### ${platform.emoji || "🥭"} ${platform.name}`,
+        "",
+        "Select the method you normally use to access your account.",
+        "",
+        "🔐 **Sparx Login**",
+        "> Sign in with your **Sparx username and password**.",
+        "",
+        "🪟 **Microsoft Login**",
+        "> Sign in using your **Microsoft school account**.",
+        "",
+        "━━━━━━━━━━━━━━━━━━━━",
+        "🔒 Your credentials are handled securely.",
+      ].join("\n")
+    )
+    .setFooter({
+      text: "🥭 NexusAI • Secure Account Login",
+    })
+    .setTimestamp();
+
+  const select = new StringSelectMenuBuilder()
+    .setCustomId(`login_type_${platform}`)
+    .setPlaceholder("🔐  Select a login method...")
+    .addOptions(
+      {
+        label: "Sparx Username & Password",
+        description: "Use your normal Sparx login details",
+        value: "password",
+        emoji: "🔐",
+      },
+      {
+        label: "Microsoft Account",
+        description: "Use your school Microsoft account",
+        value: "microsoft",
+        emoji: "🪟",
+      }
+    );
+
+  const row = new ActionRowBuilder()
+    .addComponents(select);
+
+  return interaction.reply({
+    embeds: [embed],
+    components: [row],
+    flags: MessageFlags.Ephemeral,
+  });
+}
+
+
+
+async openLoginModal(interaction, platform, loginType = 'password') {
+  const modal = new ModalBuilder()
+    .setCustomId(`school_login_${platform}_${loginType}`)
+    .setTitle(
+      loginType === 'microsoft'
+        ? `${platform} • Microsoft Login`
+        : `${platform} • Login`
+    );
+
+  const schoolInput = new TextInputBuilder()
+    .setCustomId('school')
+    .setLabel('School')
+    .setStyle(TextInputStyle.Short)
+    .setPlaceholder('Enter your school name')
+    .setRequired(true);
+
+  const usernameInput = new TextInputBuilder()
+    .setCustomId(
+      loginType === 'microsoft'
+        ? 'email'
+        : 'username'
+    )
+    .setLabel(
+      loginType === 'microsoft'
+        ? 'Microsoft Email'
+        : 'Username'
+    )
+    .setStyle(TextInputStyle.Short)
+    .setPlaceholder(
+      loginType === 'microsoft'
+        ? 'example@outlook.com'
+        : 'Enter your Sparx username'
+    )
+    .setRequired(true);
+
+  const passwordInput = new TextInputBuilder()
+    .setCustomId('password')
+    .setLabel('Password')
+    .setStyle(TextInputStyle.Short)
+    .setPlaceholder('Enter your password')
+    .setRequired(true);
+
+  modal.addComponents(
+    new ActionRowBuilder().addComponents(schoolInput),
+    new ActionRowBuilder().addComponents(usernameInput),
+    new ActionRowBuilder().addComponents(passwordInput)
+  );
+
+  console.log(
+    `🚀 SHOWING ${loginType === 'microsoft' ? 'MICROSOFT' : 'NORMAL'} LOGIN MODAL`
+  );
+
+  return interaction.showModal(modal);
+}
+
+async handleLoginModal(interaction) {
+  await interaction.deferReply({
+  flags: MessageFlags.Ephemeral
+});
+  const parts = interaction.customId.split('_');
+
+  // school_login_sparxMaths_password
+  // school_login_sparxMaths_microsoft
+
+  const platform = parts.slice(2, -1).join('_');
+  const loginType = parts[parts.length - 1];
+
+  const school =
+    interaction.fields.getTextInputValue('school');
+
+  const password =
+    interaction.fields.getTextInputValue('password');
+
+  const username =
+    loginType === 'microsoft'
+      ? null
+      : interaction.fields.getTextInputValue('username');
+
+  const email =
+    loginType === 'microsoft'
+      ? interaction.fields.getTextInputValue('email')
+      : null;
+
+  console.log('🔐 LOGIN MODAL SUBMITTED:', {
+    platform,
+    loginType,
+    school,
+    username,
+    email,
+    passwordReceived: Boolean(password)
+  });
+
+  try {
+    const payload = {
+      adapter: 'sparx',
+      action: 'login',
+      platform,
+      school,
+      method: loginType === 'microsoft'
+        ? 'microsoft'
+        : 'password',
+      username,
+      email,
+      password
+    };
+
+    await this.loginService.dispatchPlatformLogin(
+      platform,
+      payload
+    );
+
+    await interaction.editReply({
+      content:
+        `✅ **Login request submitted successfully!**\n\n` +
+        `**Platform:** ${platform}\n` +
+        `**Login Type:** ${
+          loginType === 'microsoft'
+            ? 'Microsoft'
+            : 'Normal Sparx'
+        }\n` +
+        `**School:** ${school}\n` +
+        `${
+          loginType === 'microsoft'
+            ? `**Email:** ${email}`
+            : `**Username:** ${username}`
+        }\n` +
+        `**Password:** Received securely ✅`,
+      flags: MessageFlags.Ephemeral
+    });
+
+  } catch (error) {
+    logger.error(
+      {
+        error: error.message,
+        platform,
+        loginType
+      },
+      'Failed to dispatch login'
+    );
+
+    if (interaction.replied || interaction.deferred) {
+      await interaction.editReply({
+        content:
+          `❌ Failed to submit login request: ${error.message}`
+      });
+    } else {
+      await interaction.reply({
+        content:
+          `❌ Failed to submit login request: ${error.message}`,
+        flags: MessageFlags.Ephemeral
+      });
+    }
+  }
+}
+
+
+  async handleCookieModalSubmit(interaction) {
+    if (this.loginService?.handleCookieModal) {
+      return this.loginService.handleCookieModal(interaction);
+    }
+
+    const platform = interaction.customId.replace("cookie_login_", "");
+    const cookies = interaction.fields.getTextInputValue("cookies_input");
+
+    await interaction.reply({
+      content: `🍪 Cookie session stored for **${platform}**. Automated tasks will use this session token.`,
+      flags: MessageFlags.Ephemeral
+    });
+  }
+
+  async handleSavedAccounts(interaction, platform) {
+    await interaction.reply({
+      content: `💾 Fetching saved accounts for **${platform}**... Select an account from your saved `.concat(`.env profile.`),
+      flags: MessageFlags.Ephemeral
+    });
+  }
+
+  async handleCommand(command, args, message) {
+    logger.info({ command, author: message.author.username }, 'Command received');
+
+    if (this.commandHandler && this.commandHandler.commands.has(command)) {
+      return await this.commandHandler.commands.get(command)(message, args);
+    }
+
+    switch (command) {
+      case 'help':
+        return this.handleHelp(message);
+      case 'solve':
+        return this.handleSolve(message, args);
+      case 'status':
+        return this.handleStatus(message);
+      case 'ping':
+        return this.replyToChannel(message, `🏓 Pong! ${this.client.ws.ping}ms`);
+      default:
+        return this.replyToChannel(message, '❓ Unknown command. Use `!help`');
+    }
+  }
+
+  async handleHelp(message) {
+    const embed = new EmbedBuilder()
+      .setColor('#0099ff')
+      .setTitle('📚 Auto Completer Commands')
+      .addFields(
+        {
+          name: '**Homework**',
+          value:
+            '`!homework` - View your homework progress\n' +
+            '`!homework create [subject] [name]` - Create new task\n' +
+            '`!tasks` - Alias for homework'
+        },
+        {
+          name: '**Premium**',
+          value:
+            '`!premium` - View premium tiers\n' +
+            '`!trial claim` - Start free trial'
+        },
+        {
+          name: '**Queue**',
+          value:
+            '`!queue` - View queue status\n' +
+            '`!join [platform]` - Join queue'
+        },
+        {
+          name: '**Past Papers**',
+          value:
+            '`!pastpapers` - View the latest past papers\n' +
+            '`!pastpapers <subject>` - Search by subject'
+        },
+        {
+          name: '**Scheduler**',
+          value:
+            '`!schedule` - View your schedules\n' +
+            '`!schedule create [platform] [time] [days...]` - Create schedule'
+        },
+        {
+          name: '**Info**',
+          value:
+            '`!stats` - Bot statistics\n' +
+            '`!help` - This message\n' +
+            '`!ping` - Check latency'
+        }
+      )
+      .setTimestamp();
+
+    await this.replyToChannel(message, { embeds: [embed] });
+  }
+
+  async handleSolve(message, args) {
+    if (args.length < 2) {
+      return await this.replyToChannel(message, '❌ Usage: `!solve <platform> <question>`');
+    }
+
+    const platform = args[0].toLowerCase();
+    const question = args.slice(1).join(' ');
+
+    await this.replyToChannel(
+      message,
+      `🔄 Processing your request for ${platform}...\nQuestion: ${question}`
+    );
+  }
+
+  async handleStatus(message) {
+    const guildSession = message.guild
+      ? this.activeSessions.get(message.guild.id)
+      : null;
+
+    const embed = new EmbedBuilder()
+      .setColor('#00ff00')
+      .setTitle('✅ Bot Status')
+      .addFields(
+        { name: 'Status', value: 'Online' },
+        { name: 'Ping', value: `${this.client.ws.ping}ms` },
+        { name: 'Uptime', value: this.formatUptime(this.client.uptime) },
+        { name: 'Version', value: '2.0.0' },
+        { name: 'Auto Channels', value: guildSession ? 'Enabled' : 'Disabled' }
+      )
+      .setTimestamp();
+
+    await this.replyToChannel(message, { embeds: [embed] });
+  }
+
+  async ensureGuildSession(_message) {
+    return null;
+  }
+
+  async getChannelByConfigKey(key) {
+    const channelId = config.discord.channels?.[key];
+    if (!channelId || !this.client) return null;
+
+    let channel = this.client.channels.cache.get(channelId);
+    if (!channel) {
+      channel = await this.client.channels.fetch(channelId).catch(() => null);
+    }
+
+    if (!channel) {
+      logger.warn({ channelKey: key, channelId }, 'Configured Discord channel not found');
+    }
+
+    return channel;
+  }
+
+  async sendToConfiguredChannel(key, payload, fallbackChannel = null) {
+    const channel = await this.getChannelByConfigKey(key);
+
+    if (channel) {
+      logger.info(
+        { channelKey: key, channelId: channel.id },
+        'Sending message to configured Discord channel'
+      );
+      return channel.send(payload);
+    }
+
+    if (fallbackChannel) {
+      logger.info({ channelKey: key }, 'Falling back to current Discord channel');
+      return fallbackChannel.send(payload);
+    }
+
+    return null;
+  }
+
+  async acknowledgeInteraction(interaction) {
+  try {
+    if (!interaction.deferred && !interaction.replied) {
+      await interaction.deferReply({
+  flags: MessageFlags.Ephemeral
+});
+      console.log("✅ INTERACTION DEFERRED:", interaction.customId);
+    }
+  } catch (error) {
+    logger.error(
+      {
+        error: error.message,
+        customId: interaction.customId
+      },
+      "Failed to acknowledge interaction"
+    );
+  }
+}
+
+  async handleButtonInteraction(interaction) {
+  console.log("BUTTON CLICKED:", interaction.customId);
+
+  const parts = interaction.customId.split('_');
+  const group = parts.shift();
+  const action = parts.join('_');
+
+  console.log("GROUP:", group);
+  console.log("ACTION:", action);
+
+  if (group === 'platform' && action === 'join_queue') {
+  console.log("1. JOIN QUEUE HANDLER ENTERED");
+
+  const gifPath = path.join(__dirname, '../../standard.gif');
+
+  console.log("2. GIF PATH:", gifPath);
+  console.log("3. GIF EXISTS:", fs.existsSync(gifPath));
+
+  try {
+    console.log("4. BUILDING CONTAINER");
+
+    const container =
+      ContainerFactory.buildJoinQueueContainer(
+        fs.existsSync(gifPath)
+      );
+
+    console.log("5. CONTAINER BUILT");
+
+    const payload = {
+      components: [container],
+      flags:
+        MessageFlags.IsComponentsV2 |
+        MessageFlags.Ephemeral
+    };
+
+    if (fs.existsSync(gifPath)) {
+      console.log("6. ADDING GIF");
+
+      payload.files = [
+        new AttachmentBuilder(gifPath, {
+          name: 'standard.gif'
+        })
+      ];
+    }
+
+    console.log("7. ABOUT TO REPLY TO DISCORD");
+
+    await interaction.reply(payload);
+
+    console.log("8. INTERACTION REPLIED SUCCESSFULLY");
+
+    return;
+  } catch (error) {
+    console.error("❌ JOIN QUEUE ERROR");
+    console.error("MESSAGE:", error?.message);
+    console.error("NAME:", error?.name);
+    console.error("CODE:", error?.code);
+    console.error("STACK:", error?.stack);
+
+    if (!interaction.replied && !interaction.deferred) {
+      await interaction.reply({
+        content: `❌ Join Queue failed: ${error.message}`,
+        flags: MessageFlags.Ephemeral
+      }).catch(replyError => {
+        console.error("❌ EVEN ERROR REPLY FAILED:", replyError);
+      });
+    }
+
+    return;
+  }
+}
+
+  if (group === 'homework') {
+    await this.acknowledgeInteraction(interaction);
+    return this.handleHomeworkButton(interaction, action);
+  }
+
+  if (group === 'pastpapers') {
+    await this.acknowledgeInteraction(interaction);
+    return this.handlePastPapersButton(interaction, action);
+  }
+
+  if (group === 'platform') {
+    await this.acknowledgeInteraction(interaction);
+    return this.handlePlatformButton(interaction, action);
+  }
+
+  if (group === 'schedule') {
+    await this.acknowledgeInteraction(interaction);
+    return this.handleScheduleButton(interaction, action);
+  }
+
+  if (group === 'support') {
+    await this.acknowledgeInteraction(interaction);
+    return this.handleSupportButton(interaction, action);
+  }
+
+  if (group === 'ticket') {
+    await this.acknowledgeInteraction(interaction);
+    return this.handleTicketButton(interaction, action);
+  }
+
+  if (group === 'login') {
+  console.log('🔐 LOGIN BUTTON CLICKED:', action);
+  return this.showLoginTypeMenu(interaction, action);
+}
+
+if (group === 'cookies') {
+  console.log('🍪 COOKIES BUTTON CLICKED:', action);
+  return this.loginService.openCookieModal(interaction, action);
+}
+
+if (group === 'saved') {
+  console.log('💾 SAVED ACCOUNT BUTTON CLICKED:', action);
+  return this.loginService.handleSavedAccounts(interaction, action);
+}
+
+  return this.respondToInteraction(interaction, {
+    content: "Unknown button",
+    flags: MessageFlags.Ephemeral
+  });
+}
+
+  async handleHomeworkButton(interaction, action) {
+    const embed = new EmbedBuilder()
+      .setColor('#5865F2')
+      .setTitle('📚 Homework Tracker')
+      .setDescription(`Current homework status for **${interaction.user.username}**:`)
+      .addFields(
+        { name: 'Sparx Maths', value: 'All tasks up to date', inline: true },
+        { name: 'Sparx Reader', value: '1 Reading task due', inline: true },
+        { name: 'Seneca', value: 'No pending modules', inline: true }
+      )
+      .setFooter({ text: '🥭 NexusAI Homework Manager' });
+
+    return this.respondToInteraction(interaction, { embeds: [embed] });
+  }
+
+  async handlePastPapersButton(interaction, action) {
+    const embed = new EmbedBuilder()
+      .setColor('#3BA55C')
+      .setTitle('📄 Past Papers Library')
+      .setDescription('Search for GCSE & A-Level past papers by subject:')
+      .addFields(
+        { name: 'Subjects Available', value: 'Maths, Biology, Chemistry, Physics, Computer Science' },
+        { name: 'Commands', value: 'Use `!pastpapers <subject>` for direct links.' }
+      )
+      .setFooter({ text: '🥭 NexusAI Study Resources' });
+
+    return this.respondToInteraction(interaction, { embeds: [embed] });
+  }
+
+  async handleScheduleButton(interaction, action) {
+    const manager = this.app?.scheduleManager;
+
+    if (manager) {
+      const schedules = manager.getUserSchedules(interaction.user.id);
+      const embed = EmbedFactory.buildScheduleEmbed(schedules);
+      const buttons = ActionRowFactory.buildScheduleButtons();
+
+      return this.respondToInteraction(interaction, {
+        embeds: [embed],
+        components: [buttons]
+      });
+    }
+
+    const embed = new EmbedBuilder()
+      .setColor('#FAA61A')
+      .setTitle('⏰ Auto-Schedule Manager')
+      .setDescription('Automated auto-solver routines:')
+      .addFields(
+        { name: 'Active Schedules', value: 'None configured yet.' },
+        { name: 'Setup', value: 'Use `!schedule create [platform] [time]`' }
+      )
+      .setFooter({ text: '🥭 NexusAI Scheduler' });
+
+    return this.respondToInteraction(interaction, { embeds: [embed] });
+  }
+
+  async handleSupportButton(interaction, action) {
+    const embed = new EmbedBuilder()
+      .setColor('#ED4245')
+      .setTitle('🆘 NexusAI Support')
+      .setDescription('Need assistance?')
+      .addFields(
+        { name: 'Guides', value: 'Check channel pins or run `!help`.' },
+        { name: 'Tickets', value: 'Click **Create Support Ticket** below.' }
+      )
+      .setFooter({ text: '🥭 NexusAI Support Desk' });
+
+    return this.respondToInteraction(interaction, { embeds: [embed] });
+  }
+
+  async handleTicketButton(interaction, action) {
+    const guild = interaction.guild;
+    if (!guild) {
+      return this.respondToInteraction(interaction, {
+        content: 'Tickets can only be created inside a server.'
+      });
+    }
+
+    try {
+      const channel = await guild.channels.create({
+        name: `ticket-${interaction.user.username}`,
+        type: ChannelType.GuildText,
+        permissionOverwrites: [
+          {
+            id: guild.id,
+            deny: [PermissionFlagsBits.ViewChannel]
+          },
+          {
+            id: interaction.user.id,
+            allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages]
+          }
+        ]
+      });
+
+      const embed = new EmbedBuilder()
+        .setColor('#5865F2')
+        .setTitle(`🎟️ Ticket Opened: ${interaction.user.username}`)
+        .setDescription('Please describe your issue below. A staff member will assist you shortly.')
+        .setTimestamp();
+
+      await channel.send({ content: `<@${interaction.user.id}>`, embeds: [embed] });
+
+      return this.respondToInteraction(interaction, {
+        content: `✅ Support ticket created! Head over to ${channel}.`
+      });
+    } catch (err) {
+      logger.error({ error: err.message }, 'Failed to create ticket channel');
+      return this.respondToInteraction(interaction, {
+        content: '❌ Failed to create ticket channel. Ensure bot has permission to manage channels.'
+      });
+    }
+  }
+
+  async handleSelectMenuInteraction(interaction) {
+  const { customId, values } = interaction;
+  const selectedValue = values?.[0];
+
+  console.log('SELECT MENU:', customId);
+  console.log('SELECTED VALUE:', selectedValue);
+
+  // ==========================================
+  // LOGIN TYPE SELECT
+  // IMPORTANT: DO NOT defer/acknowledge this!
+  // showModal() must be the first response.
+  // ==========================================
+  if (customId.startsWith('login_type_')) {
+    console.log('➡️ LOGIN TYPE MENU');
+
+    return this.handleLoginTypeSelect(interaction);
+  }
+
+  // ==========================================
+  // PLATFORM SELECT
+  // ==========================================
+  const isV2 = customId === 'platform_select';
+
+  await this.acknowledgeInteraction(interaction, isV2);
+
+  if (customId === 'platform_select') {
+    if (!selectedValue) {
+      return this.respondToInteraction(interaction, {
+        content: '❌ No platform was selected. Please try again.'
+      });
+    }
+
+    return this.handlePlatformButton(
+      interaction,
+      selectedValue
+    );
+  }
+
+  // ==========================================
+  // OTHER PLATFORM MENUS
+  // ==========================================
+  if (customId.startsWith('platform_')) {
+    const action =
+      selectedValue ||
+      customId.replace('platform_', '');
+
+    return this.handlePlatformButton(
+      interaction,
+      action
+    );
+  }
+
+  return this.respondToInteraction(interaction, {
+    content: '❌ Select menu action not supported yet.'
+  });
+}
+
+
+  async handleLoginTypeSelect(interaction) {
+  const parts = interaction.customId.split('_');
+
+  // login_type_sparxMaths
+  const platform = parts.slice(2).join('_');
+
+  const loginType = interaction.values?.[0];
+
+  console.log('🔐 LOGIN TYPE SELECTED:', {
+    platform,
+    loginType
+  });
+
+  if (!loginType) {
+    return interaction.reply({
+      content: '❌ Please select a login method.',
+      flags: MessageFlags.Ephemeral
+    });
+  }
+
+  if (loginType !== 'password' && loginType !== 'microsoft') {
+    return interaction.reply({
+      content: '❌ Invalid login method.',
+      flags: MessageFlags.Ephemeral
+    });
+  }
+
+  return this.openLoginModal(
+    interaction,
+    platform,
+    loginType
+  );
+}
+
+  async handlePlatformButton(interaction, action) {
+    const userId = interaction.user.id;
+
+    if (!this.app?.queueSystem) {
+      const { QueueSystem } = await import('../queue/queueSystem.js');
+      if (this.app) this.app.queueSystem = new QueueSystem();
+    }
+    const queueSystem = this.app?.queueSystem;
+
+    switch (action) {
+      case 'join_queue': {
+
+  const gifPath = path.join(__dirname, '../../standard.gif');
+  const hasGif = fs.existsSync(gifPath);
+
+  const container =
+    ContainerFactory.buildJoinQueueContainer(hasGif);
+
+  const payload = {
+    components: [container],
+    flags: MessageFlags.IsComponentsV2 | MessageFlags.Ephemeral
+  };
+
+  if (hasGif) {
+    payload.files = [
+      new AttachmentBuilder(gifPath, {
+        name: 'standard.gif'
+      })
+    ];
+  }
+
+  return interaction.editReply(payload);
+}
+
+      case "join_sparxMaths":
+      case "join_sparxReader":
+      case "join_sparxScience":
+      case "join_languagenut":
+      case "join_bedrock":
+      case "join_seneca": {
+        const selectedPlatform = action.replace("join_", "");
+
+        if (!queueSystem) {
+          return this.respondToInteraction(interaction, {
+            content: 'Queue system is not available.'
+          });
+        }
+
+        const platform = this.getPlatformDefinition(selectedPlatform);
+
+        if (!platform) {
+          return this.respondToInteraction(interaction, {
+            content: '❌ Unknown platform.'
+          });
+        }
+
+        this.pendingLogins.set(userId, {
+          platform: platform.key,
+          name: platform.name,
+          createdAt: Date.now()
+        });
+
+        setTimeout(() => {
+          this.pendingLogins.delete(userId);
+        }, 300000);
+
+const embed = new EmbedBuilder()
+  .setColor("#F4A300")
+  .setTitle(`${platform.emoji ? `${platform.emoji} ` : ""}${platform.name} • Account Connection`)
+  .setDescription(
+    [
+      "## 🔐 Connect your account",
+      "",
+      "Connect **Sparx Maths** to NexusAI to get started.",
+      "",
+      "╭──────────────────────────────╮",
+      "│  🔑 **Username & Password**",
+      "│  Sign in with your normal credentials.",
+      "│",
+      "│  🍪 **Existing Session**",
+      "│  Connect using an authenticated session.",
+      "│",
+      "│  💾 **Saved Account**",
+      "│  Quickly use an account you've saved.",
+      "╰──────────────────────────────╯",
+      "",
+      "### 🛡️ Account Security",
+      "Your login information is handled privately by NexusAI.",
+      "",
+      "🔒 **Private interaction** • Only you can see this panel."
+    ].join("\n")
+  )
+
+const row = new ActionRowBuilder().addComponents(
+  new ButtonBuilder()
+    .setCustomId(`login_${selectedPlatform}`)
+    .setLabel("Sign In")
+    .setEmoji("🔑")
+    .setStyle(ButtonStyle.Primary),
+
+  new ButtonBuilder()
+    .setCustomId(`cookies_${selectedPlatform}`)
+    .setLabel("Session")
+    .setEmoji("🍪")
+    .setStyle(ButtonStyle.Secondary),
+
+  new ButtonBuilder()
+    .setCustomId(`saved_${selectedPlatform}`)
+    .setLabel("Saved Account")
+    .setEmoji("💾")
+    .setStyle(ButtonStyle.Success)
+);
+
+return this.respondToInteraction(interaction, {
+  embeds: [embed],
+  components: [row],
+});
+}
+
+
+
+
+      case 'settings': {
+        const settingsEmbed = new EmbedBuilder()
+          .setColor('#5865F2')
+          .setTitle('⚙️ NexusAI Settings')
+          .setDescription('Configure your NexusAI experience:')
+          .addFields(
+            { name: '📋 Saved Accounts', value: 'Configure your platform accounts in the .env file.' },
+            { name: '🔔 Notifications', value: 'Homework updates are sent to this channel.' },
+            { name: '⏰ Auto-Schedule', value: 'Use !schedule create to set up automatic reminders.' }
+          )
+          .setTimestamp()
+          .setFooter({ text: '🥭 NexusAI • Settings' });
+
+        return this.respondToInteraction(interaction, {
+          embeds: [settingsEmbed]
+        });
+      }
+
+      case 'feedback': {
+        const feedbackEmbed = new EmbedBuilder()
+          .setColor('#FFD700')
+          .setTitle('💬 Feedback & Suggestions')
+          .setDescription('We value your feedback! Here\'s how to share:')
+          .addFields(
+            { name: '📝 Create a Ticket', value: 'Use !ticket create feedback <your message>' },
+            { name: '💡 Feature Requests', value: 'Use !ticket create suggestion <your idea>' },
+            { name: '🐛 Report a Bug', value: 'Use !ticket create bug <description>' }
+          )
+          .setTimestamp()
+          .setFooter({ text: '🥭 NexusAI • Your feedback shapes our future' });
+
+        return this.respondToInteraction(interaction, {
+          embeds: [feedbackEmbed]
+        });
+      }
+
+      default: {
+        return this.respondToInteraction(interaction, {
+          content: 'Unknown platform action.'
+        });
+      }
+    }
+  }
+
+  getPlatformDefinition(platformKey) {
+    const normalizedKey = String(platformKey || '').trim();
+    if (!normalizedKey) return null;
+
+    if (this.platformService?.getPlatform) {
+      const servicePlatform = this.platformService.getPlatform(normalizedKey);
+      if (servicePlatform) {
+        return servicePlatform;
+      }
+    }
+
+    const fallbackMap = {
+      sparxMaths: { name: 'Sparx Maths', key: 'sparxMaths', emoji: '<:SparxMaths:1515672129188790302>' },
+      sparxReader: { name: 'Sparx Reader', key: 'sparxReader', emoji: '<:SparxReader:1515672202375204945>' },
+      sparxScience: { name: 'Sparx Science', key: 'sparxScience', emoji: '<:SparxScience:1515672274051797072>' },
+      languagenut: { name: 'LanguageNut', key: 'languagenut', emoji: '<:LanguageNut:1515672374878670858>' },
+      bedrock: { name: 'Bedrock', key: 'bedrock', emoji: '<:Bedrock:1529265581273124935>' },
+      seneca: { name: 'Seneca', key: 'seneca', emoji: '<:Seneca:1515672492512120963>' }
+    };
+
+    return fallbackMap[normalizedKey] || null;
+  }
+
+  async respondToInteraction(interaction, payload) {
+  try {
+
+    if (interaction.deferred || interaction.replied) {
+      return await interaction.editReply(payload);
+    }
+
+    return await interaction.reply(payload);
+
+  } catch (error) {
+
+    logger.error(
+      { 
+        error: error.message,
+        customId: interaction.customId
+      },
+      'Failed to respond to interaction'
+    );
+
+    if (interaction.deferred || interaction.replied) {
+      return interaction.followUp({
+        content: '❌ Error processing action.',
+        flags: MessageFlags.Ephemeral
+      }).catch(() => {});
+    }
+  }
+}
+
+  async startScheduleLoop() {
+    if (this.scheduleLoop) return;
+
+    this.scheduleLoop = setInterval(async () => {
+      if (!this.app?.scheduleManager) return;
+
+      const schedules = this.app.scheduleManager.getSchedulesToRun();
+      if (!schedules.length) return;
+
+      for (const schedule of schedules) {
+        const channel = await this.getChannelByConfigKey('autoSchedule');
+        if (!channel) continue;
+
+        const embed = new EmbedBuilder()
+          .setColor('#5865F2')
+          .setTitle('📅 Auto Schedule Triggered')
+          .setDescription(`Your scheduled homework job is ready for **${schedule.platform}**.`)
+          .addFields(
+            { name: 'Schedule', value: schedule.name, inline: true },
+            { name: 'Platform', value: schedule.platform, inline: true },
+            { name: 'Next Run', value: schedule.nextRun ? schedule.nextRun.toLocaleString() : 'N/A', inline: false }
+          )
+          .setTimestamp();
+
+        await channel.send({ embeds: [embed] }).catch(() => null);
+
+        this.app.scheduleManager.markAsRun(schedule.id);
+      }
+    }, 30000);
+  }
+
+  stopScheduleLoop() {
+    if (this.scheduleLoop) {
+      clearInterval(this.scheduleLoop);
+      this.scheduleLoop = null;
+    }
+  }
+
+  async replyToChannel(message, payload) {
+    const guildSession = message.guild
+      ? this.activeSessions.get(message.guild.id)
+      : null;
+
+    if (guildSession && !this.isSessionChannel(message.channel.id, guildSession)) {
+      return this.routeReply(message, payload, guildSession);
+    }
+
+    return message.channel.send(payload);
+  }
+
+  async routeReply(message, payload, guildSession) {
+    const session = guildSession || (
+      message.guild ? this.activeSessions.get(message.guild.id) : null
+    );
+
+    if (!session) {
+      return message.channel.send(payload);
+    }
+
+    const mainChannel = message.guild.channels.cache.get(session.mainChannelId);
+
+    if (mainChannel) {
+      return mainChannel.send(payload);
+    }
+
+    return message.channel.send(payload);
+  }
+
+  isSessionChannel(channelId, guildSession) {
+    const session = guildSession || (
+      this.activeSessions.size
+        ? Array.from(this.activeSessions.values()).find(s =>
+            Object.values(s.channelIds || {}).includes(channelId)
+          )
+        : null
+    );
+
+    if (!session) return false;
+
+    return Object.values(session.channelIds || {}).includes(channelId);
+  }
+
+  formatUptime(ms) {
+    if (!ms) return 'N/A';
+
+    const seconds = Math.floor(ms / 1000) % 60;
+    const minutes = Math.floor(ms / (1000 * 60)) % 60;
+    const hours = Math.floor(ms / (1000 * 60 * 60)) % 24;
+
+    return `${hours}h ${minutes}m ${seconds}s`;
+  }
+
+  async login() {
+    try {
+      await this.client.login(config.discord.token);
+      logger.info('Discord bot logged in successfully');
+      this.startScheduleLoop();
+    } catch (error) {
+      logger.error({ error: error.message }, 'Failed to login to Discord');
+      throw error;
+    }
+  }
+
+  setPresence() {
+    const activities = [
+      { name: '📚 Homework Solutions', type: ActivityType.Watching },
+      { name: '📈 Your Progress', type: ActivityType.Watching },
+      { name: '✨ Students Learning', type: ActivityType.Watching },
+      { name: '🧠 AI Tutoring', type: ActivityType.Watching },
+      { name: '🥭 NexusAI 🎓', type: ActivityType.Playing },
+      { name: '🤖 Smart Learning', type: ActivityType.Playing },
+      { name: '⚡ Solving Problems', type: ActivityType.Playing },
+      { name: '🎯 Education Magic', type: ActivityType.Playing }
+    ];
+
+    if (this.presenceInterval) clearInterval(this.presenceInterval);
+
+    const updatePresence = () => {
+      try {
+        const activity = activities[Math.floor(Math.random() * activities.length)];
+
+        this.client.user.setPresence({
+          activities: [activity],
+          status: 'online'
+        });
+
+        logger.info({ activity: activity.name, type: activity.type }, '🎭 Bot presence updated');
+      } catch (error) {
+        logger.error({ error: error.message }, '❌ Failed to update presence');
+      }
+    };
+
+    updatePresence();
+    this.presenceInterval = setInterval(updatePresence, 30000);
+  }
+
+  async clearChannelMessages(channelKey) {
+    const channel = await this.getChannelByConfigKey(channelKey);
+    if (!channel) return;
+
+    try {
+      let deletedCount = 0;
+
+      while (true) {
+        const messages = await channel.messages.fetch({ limit: 100 });
+        if (messages.size === 0) break;
+
+        const fourteenDaysAgo = Date.now() - 1209600000;
+
+        const youngMessages = messages.filter(
+          msg => msg.createdTimestamp > fourteenDaysAgo
+        );
+        const oldMessages = messages.filter(
+          msg => msg.createdTimestamp <= fourteenDaysAgo
+        );
+
+        if (youngMessages.size > 0) {
+          const deletedBatch = await channel.bulkDelete(youngMessages, true);
+          deletedCount += deletedBatch.size;
+        }
+
+        if (oldMessages.size > 0) {
+          for (const msg of oldMessages.values()) {
+            await msg.delete().catch(() => {});
+            deletedCount++;
+            await new Promise(resolve => setTimeout(resolve, 500));
+          }
+        }
+
+        if (youngMessages.size === 0 && oldMessages.size === 0) break;
+      }
+
+      if (deletedCount > 0) {
+        logger.info(
+          { channel: channelKey, messagesDeleted: deletedCount },
+          '🗑️ Cleared channel'
+        );
+      }
+    } catch (error) {
+      logger.warn(
+        { channel: channelKey, error: error.message },
+        'Failed to clear channel'
+      );
+    }
+  }
+
+  async sendStartupMessages() {
+  try {
+    const channels = config.discord.channels;
+
+    logger.info('🗑️ Clearing all channels before refresh...');
+
+    // Clear channels
+    if (config.features.refreshStartupChannels && channels.learningPlatform) {
+      await this.clearChannelMessages('learningPlatform');
+    }
+
+    if (config.features.refreshStartupChannels && channels.autoSchedule) {
+      await this.clearChannelMessages('autoSchedule');
+    }
+
+    if (config.features.refreshStartupChannels && channels.supportTickets) {
+      await this.clearChannelMessages('supportTickets');
+    }
+
+
+    /*
+    ==================================
+    LEARNING PLATFORM CHANNEL
+    ==================================
+    */
+
+    if (channels.learningPlatform) {
+
+  const gifPath = path.join(__dirname, '../../standard.gif');
+  const hasGif = fs.existsSync(gifPath);
+
+  console.log("USING LEARNING HOME CONTAINER");
+
+  const container =
+    ContainerFactory.buildLearningHomeContainer(hasGif);
+
+  const payload = {
+    components: [container],
+    flags: MessageFlags.IsComponentsV2
+  };
+
+  if (hasGif) {
+    payload.files = [
+      new AttachmentBuilder(gifPath, {
+        name: 'standard.gif'
+      })
+    ];
+  }
+
+  await this.sendToConfiguredChannel(
+    'learningPlatform',
+    payload
+  ).catch(err =>
+    logger.warn(
+      {
+        channel: 'learningPlatform',
+        error: err.message
+      },
+      'Failed to send learning platform message'
+    )
+  );
+}
+
+    /*
+==================================
+AUTO SCHEDULE CHANNEL
+==================================
+*/
+
+if (channels.autoSchedule) {
+
+  const payload = {
+    components: [
+      ContainerFactory.buildScheduleContainer()
+    ],
+    flags: MessageFlags.IsComponentsV2
+  };
+
+  await this.sendToConfiguredChannel(
+    'autoSchedule',
+    payload
+  ).catch(err =>
+    logger.warn(
+      {
+        channel: 'autoSchedule',
+        error: err.message
+      },
+      'Failed to send auto schedule message'
+    )
+  );
+}
+
+/*
+==================================
+SUPPORT CHANNEL
+==================================
+*/
+
+if (channels.supportTickets) {
+
+  const payload = {
+  components: [
+    ContainerFactory.buildSupportContainer()
+  ],
+  flags: MessageFlags.IsComponentsV2
+};
+
+  await this.sendToConfiguredChannel(
+    'supportTickets',
+    payload
+  ).catch(err =>
+    logger.warn(
+      {
+        channel: 'supportTickets',
+        error: err.message
+      },
+      'Failed to send support message'
+    )
+  );
+}
+
+    logger.info('✅ All channels refreshed and ready!');
+
+
+  } catch (error) {
+
+    logger.error(
+      {
+        error: error.message
+      },
+      'Error sending startup messages'
+    );
+
+  }
+}
+
+async close() {
+  try {
+    this.stopScheduleLoop();
+    if (this.presenceInterval) {
+      clearInterval(this.presenceInterval);
+      this.presenceInterval = null;
+    }
+    await this.client.destroy();
+    logger.info("Discord bot disconnected");
+  } catch (error) {
+    logger.error(
+      { error: error.message },
+      "Error closing Discord bot"
+    );
+  }
+}
+
+}
+
+export default DiscordBot;

@@ -7,14 +7,8 @@ import { EmbedBuilder } from 'discord.js';
 export class CommandHandler {
 
  constructor(app) {
-
-   console.log("COMMAND HANDLER CONSTRUCTOR START");
-
    this.app = app;
    this.commands = new Map();
-
-   console.log("COMMAND HANDLER CONSTRUCTOR END");
-
  }
 
   registerCommands() {
@@ -134,6 +128,59 @@ export class CommandHandler {
     const buttons = ActionRowFactory.buildQueueButtons(platforms[0]);
 
     return await message.reply({ embeds: [embed], components: [buttons] });
+  }
+
+  /**
+   * Show or create reminder schedules.
+   * Usage: !schedule create <platform> <HH:MM> [Monday,Wednesday,Friday]
+   */
+  async handleSchedule(message, args) {
+    const manager = this.app.scheduleManager;
+
+    if (!manager) {
+      throw new Error('Scheduling is not available right now.');
+    }
+
+    const subcommand = args[0]?.toLowerCase();
+
+    if (subcommand === 'create') {
+      const platform = args[1]?.trim();
+      const time = args[2]?.trim();
+      const daysOfWeek = args[3]
+        ? args[3].split(',').map(day => day.trim()).filter(Boolean)
+        : undefined;
+      const validDays = new Set([
+        'Monday', 'Tuesday', 'Wednesday', 'Thursday',
+        'Friday', 'Saturday', 'Sunday'
+      ]);
+
+      if (
+        !platform ||
+        !/^([01]\d|2[0-3]):[0-5]\d$/.test(time || '') ||
+        (daysOfWeek && daysOfWeek.some(day => !validDays.has(day)))
+      ) {
+        return message.reply(
+          'Usage: `!schedule create <platform> <HH:MM> [Monday,Wednesday,Friday]`'
+        );
+      }
+
+      manager.createSchedule(message.author.id, {
+        platform,
+        time,
+        daysOfWeek,
+        name: `${platform} reminder`
+      });
+    }
+
+    const schedules = manager.getUserSchedules(message.author.id);
+    const embed = EmbedFactory.buildScheduleEmbed(schedules);
+    const buttons = ActionRowFactory.buildScheduleButtons();
+
+    return this.postToChannelOrReply(
+      message,
+      { embeds: [embed], components: [buttons] },
+      'schedule'
+    );
   }
 
   /**

@@ -1,4 +1,4 @@
-export class SchoolSelectionTask {
+﻿export class SchoolSelectionTask {
   constructor(client) {
     this.client = client;
   }
@@ -18,3 +18,4 @@ export class SchoolSelectionTask {
 }
 
 export default SchoolSelectionTask;
+

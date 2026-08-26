@@ -1,4 +1,5 @@
-import { chromium } from "playwright";
+﻿import { chromium } from "playwright";
+import fs from "node:fs";
 
 export class BrowserManager {
   constructor() {
@@ -7,12 +8,37 @@ export class BrowserManager {
     this.page = null;
   }
 
-  async initialize() {
+  async initialize(options = {}) {
     this.browser = await chromium.launch({
-      headless: false
-    });
+  headless: false,
+  args: [
+    "--start-maximized"
+  ]
+});
 
-    this.context = await this.browser.newContext();
+    const contextOptions = {};
+
+    // Load a previously saved Playwright session if available.
+    if (
+      options.storageState &&
+      fs.existsSync(options.storageState)
+    ) {
+      contextOptions.storageState = options.storageState;
+
+      console.log(
+        "Loading saved browser session:",
+        options.storageState
+      );
+    } else if (options.storageState) {
+      console.log(
+        "No saved browser session found. Starting a fresh session."
+      );
+    }
+
+    this.context = await this.browser.newContext({
+  ...contextOptions,
+  viewport: null
+});
 
     this.page = await this.context.newPage();
 
@@ -21,7 +47,9 @@ export class BrowserManager {
 
   async goto(url) {
     if (!this.page) {
-      throw new Error("Browser has not been initialized.");
+      throw new Error(
+        "Browser has not been initialized."
+      );
     }
 
     await this.page.goto(url);
@@ -30,29 +58,52 @@ export class BrowserManager {
   }
 
   getBrowser() {
-  if (!this.browser) {
-    throw new Error("Browser has not been initialized.");
+    if (!this.browser) {
+      throw new Error(
+        "Browser has not been initialized."
+      );
+    }
+
+    return this.browser;
   }
 
-  return this.browser;
-}
+  getContext() {
+    if (!this.context) {
+      throw new Error(
+        "Browser context has not been initialized."
+      );
+    }
 
-getContext() {
-  if (!this.context) {
-    throw new Error("Browser context has not been initialized.");
+    return this.context;
   }
 
-  return this.context;
-}
+  getPage() {
+    if (!this.page) {
+      throw new Error(
+        "Browser has not been initialized."
+      );
+    }
 
-getPage() {
-  if (!this.page) {
-    throw new Error("Browser page has not been initialized.");
+    return this.page;
   }
 
-  return this.page;
-}
-  
+  async saveStorageState(filePath) {
+    if (!this.context) {
+      throw new Error(
+        "Browser context has not been initialized."
+      );
+    }
+
+    await this.context.storageState({
+      path: filePath
+    });
+
+    console.log(
+      "Browser session saved:",
+      filePath
+    );
+  }
+
   async shutdown() {
     if (this.browser) {
       await this.browser.close();
@@ -65,3 +116,8 @@ getPage() {
     console.log("Browser closed");
   }
 }
+
+export default BrowserManager;
+
+
+

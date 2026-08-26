@@ -1,44 +1,260 @@
+﻿import smartLogin from "../../../../../src/utils/smartLogin.js";
+import { QuestionParser } from "./QuestionParser.js";
+
 export class SparxClient {
-  constructor(browserManager) {
+  constructor(browserManager, options = {}) {
     this.browserManager = browserManager;
+
+    this.questionParser =
+      options.questionParser ??
+      new QuestionParser();
   }
 
+  // ============================================================
+  // PAGE
+  // ============================================================
 
   getPage() {
     return this.browserManager.getPage();
   }
 
+  // ============================================================
+  // QUESTION INSPECTION
+  // ============================================================
+
+  async inspectQuestion(url) {
+    const page = this.getPage();
+
+    if (!page) {
+      throw new Error("Sparx page is not available.");
+    }
+
+    if (!url) {
+      throw new Error("Question URL was not provided.");
+    }
+
+    await page.goto(url, {
+      waitUntil: "domcontentloaded",
+      timeout: 30000
+    });
+
+    await page.waitForTimeout(1200);
+
+    return await this.questionParser.parse(page);
+  }
+
+    // ============================================================
+  // AUTHENTICATION
+  // ============================================================
+
+  async ensureAuthenticated() {
+    const existingSession =
+      await this.isLoggedIn();
+
+    if (existingSession) {
+      console.log(
+        "[Sparx] Existing session is authenticated."
+      );
+
+      return true;
+    }
+
+    console.log(
+      "[Sparx] No active authenticated session found."
+    );
+
+    console.log(
+      "[Sparx] Opening Sparx login page..."
+    );
+
+    const page = this.getPage();
+
+    if (!page) {
+      console.log(
+        "[Sparx] Browser page is unavailable."
+      );
+
+      return false;
+    }
+
+    try {
+      await this.gotoLogin();
+
+      await page
+        .bringToFront()
+        .catch(() => {});
+
+      console.log(
+        "[Sparx] Please complete Sparx authentication in the browser."
+      );
+
+      console.log(
+        "[Sparx] Waiting up to 5 minutes for authentication..."
+      );
+
+      try {
+        await page.waitForURL(
+          url =>
+            url
+              .toString()
+              .includes(
+                "maths.sparx-learning.com/student/"
+              ),
+          {
+            timeout: 300000
+          }
+        );
+      } catch {
+        // The URL may not change exactly as expected.
+        // We perform an explicit authentication check below.
+      }
+
+      await page.waitForTimeout(1500);
+
+      const authenticated =
+        await this.isLoggedIn(page);
+
+      if (!authenticated) {
+        console.log(
+          "[Sparx] Authentication was not detected."
+        );
+
+        return false;
+      }
+
+      console.log(
+        "[Sparx] Manual authentication successful ✅"
+      );
+
+      // ========================================================
+      // SAVE THE NEW AUTHENTICATED BROWSER STATE
+      // ========================================================
+
+      const storageStatePath =
+        "packages/adapters/sparx/storageState.json";
+
+      await this.browserManager.saveStorageState(
+        storageStatePath
+      );
+
+      console.log(
+        "[Sparx] ✅ Authentication state saved:"
+      );
+
+      console.log(
+        `         ${storageStatePath}`
+      );
+
+      return true;
+    } catch (error) {
+      console.error(
+        "[Sparx] Authentication flow failed:",
+        error?.message ?? error
+      );
+
+      return false;
+    }
+  }
+
+  // ============================================================
+  // COOKIES
+  // ============================================================
 
   async acceptCookies() {
     const page = this.getPage();
 
-    try {
-      const acceptButton = page.getByRole("button", {
-        name: /accept all/i
-      });
+    if (!page) {
+      return false;
+    }
 
-      if (await acceptButton.count() > 0) {
-        await acceptButton.first().click();
+    console.log(
+      "[Sparx] Checking for cookie consent..."
+    );
+
+    const buttons =
+      page.getByRole("button");
+
+    const count =
+      await buttons.count();
+
+    for (let i = 0; i < count; i++) {
+      const button =
+        buttons.nth(i);
+
+      const text = (
+        await button
+          .innerText()
+          .catch(() => "")
+      ).trim();
+
+      if (
+        !/accept all|accept|agree/i.test(
+          text
+        )
+      ) {
+        continue;
+      }
+
+      if (
+        !(await button
+          .isVisible()
+          .catch(() => false))
+      ) {
+        continue;
+      }
+
+      console.log(
+        `[Sparx] Cookie button found: "${text}"`
+      );
+
+      await button
+        .scrollIntoViewIfNeeded()
+        .catch(() => {});
+
+      await page.waitForTimeout(500);
+
+      try {
+        await button.click({
+          timeout: 10000
+        });
 
         await page.waitForTimeout(1000);
 
-        console.log("Cookies accepted");
+        console.log(
+          "[Sparx] Cookies accepted."
+        );
 
         return true;
+      } catch (error) {
+        console.log(
+          "[Sparx] Cookie button click failed:",
+          error?.message ?? error
+        );
       }
-
-    } catch (error) {
-      console.log("No cookie popup");
     }
+
+    console.log(
+      "[Sparx] No visible cookie button found."
+    );
 
     return false;
   }
 
+  // ============================================================
+  // NAVIGATION
+  // ============================================================
 
   async goto(url) {
-    return await this.browserManager.goto(url);
-  }
+    if (!url) {
+      throw new Error(
+        "Sparx navigation URL was not provided."
+      );
+    }
 
+    return await this.browserManager.goto(
+      url
+    );
+  }
 
   async gotoHome() {
     return await this.goto(
@@ -46,402 +262,878 @@ export class SparxClient {
     );
   }
 
-
   async gotoLogin() {
-    const result = await this.goto(
-      "https://login.sparxmaths.uk"
+    const result =
+      await this.goto(
+        "https://maths.sparx-learning.com/student/homework"
+      );
+
+    const page =
+      this.getPage();
+
+    if (!page) {
+      throw new Error(
+        "Sparx page is unavailable after navigation."
+      );
+    }
+
+    await page
+      .waitForLoadState(
+        "domcontentloaded"
+      )
+      .catch(() => {});
+
+    await page.waitForTimeout(
+      1500
     );
 
     await this.acceptCookies();
 
+    console.log(
+      `[Sparx] Login page URL: ${page.url()}`
+    );
+
+    console.log(
+      `[Sparx] Login page title: ${await page.title()}`
+    );
+
     return result;
   }
 
-
   async getCurrentUrl() {
-    return this.getPage().url();
-  }
+    const page =
+      this.getPage();
 
+    if (!page) {
+      return "";
+    }
+
+    return page.url();
+  }
 
   async getTitle() {
-    return await this.getPage().title();
+    const page =
+      this.getPage();
+
+    if (!page) {
+      return "";
+    }
+
+    return await page.title();
   }
 
+  // ============================================================
+  // PAGE TYPE
+  // ============================================================
 
-  detectPageType(url, title = "") {
+  detectPageType(
+    url,
+    title = ""
+  ) {
+    url =
+      String(
+        url ?? ""
+      ).toLowerCase();
 
-    url = url.toLowerCase();
-    title = title.toLowerCase();
+    title =
+      String(
+        title ?? ""
+      ).toLowerCase();
 
-
-    if (url.includes("welcome")) {
+    if (
+      url.includes(
+        "welcome"
+      )
+    ) {
       return "welcome";
     }
 
-
     if (
-      url.includes("selectschool") ||
-      title.includes("select school")
+      url.includes(
+        "selectschool"
+      ) ||
+      title.includes(
+        "select school"
+      )
     ) {
       return "school-selection";
     }
 
-
     if (
-      url.includes("login") ||
-      title.includes("login")
+      url.includes(
+        "login"
+      ) ||
+      title.includes(
+        "login"
+      ) ||
+      title.includes(
+        "sparx maths login"
+      )
     ) {
       return "login";
     }
 
-
     if (
-      url.includes("student") ||
-      title.includes("dashboard")
+      url.includes(
+        "student"
+      ) ||
+      title.includes(
+        "dashboard"
+      )
     ) {
       return "dashboard";
     }
 
-
     return "unknown";
   }
 
-
+  // ============================================================
+  // SITE INFO
+  // ============================================================
 
   async getSiteInfo() {
-
     await this.gotoHome();
 
-    const url = await this.getCurrentUrl();
-    const title = await this.getTitle();
+    const url =
+      await this.getCurrentUrl();
 
+    const title =
+      await this.getTitle();
 
     return {
       success: true,
       url,
       title,
-      pageType: this.detectPageType(url,title)
+      pageType:
+        this.detectPageType(
+          url,
+          title
+        )
     };
   }
 
+  // ============================================================
+  // SCHOOL SELECTION
+  // ============================================================
 
+  async searchSchool(
+    schoolName
+  ) {
+    const page =
+      this.getPage();
 
-  async searchSchool(schoolName) {
-
-    const page = this.getPage();
-
-
-    if (!schoolName) {
+    if (!page) {
       throw new Error(
-        "School name was not provided"
+        "Sparx page is unavailable."
       );
     }
 
+    if (!schoolName) {
+      throw new Error(
+        "School name was not provided."
+      );
+    }
 
-    await page.waitForLoadState(
-      "networkidle"
+    console.log(
+      `[Sparx] Searching for school: ${schoolName}`
     );
 
+    console.log(
+      `[Sparx] School page: ${page.url()}`
+    );
 
-    const input = page.getByPlaceholder(
-      "Start typing your school's name..."
-    ).first();
+    console.log(
+      `[Sparx] Page title: ${await page.title()}`
+    );
 
+    await page
+      .waitForLoadState(
+        "domcontentloaded"
+      )
+      .catch(() => {});
+
+    const input =
+      page
+        .getByPlaceholder(
+          "Start typing your school's name...",
+          {
+            exact: true
+          }
+        )
+        .first();
 
     await input.waitFor({
-      state:"visible",
-      timeout:10000
+      state: "visible",
+      timeout: 15000
     });
 
+    console.log(
+      "[Sparx] School search input found."
+    );
 
     await input.fill(
       schoolName
     );
 
+    console.log(
+      `[Sparx] Entered school name: ${schoolName}`
+    );
 
     await page.waitForTimeout(
       2000
     );
 
+    console.log(
+      "[Sparx] Search results should now be visible."
+    );
 
     return {
-      success:true,
+      success: true,
       schoolName
     };
   }
 
+  async selectSchool(
+    schoolName
+  ) {
+    const page =
+      this.getPage();
 
+    if (!page) {
+      throw new Error(
+        "Sparx page is unavailable."
+      );
+    }
 
-  async selectSchool(schoolName) {
+    console.log(
+      `[Sparx] Selecting school: ${schoolName}`
+    );
 
-    const page = this.getPage();
+    const school =
+      page
+        .getByText(
+          schoolName,
+          {
+            exact: true
+          }
+        )
+        .first();
 
+    try {
+      await school.waitFor({
+        state: "visible",
+        timeout: 10000
+      });
 
-    const school = page.getByText(
-      schoolName,
-      {
-        exact:true
-      }
-    ).first();
-
-
-    await school.waitFor({
-      state:"visible",
-      timeout:10000
-    });
-
-
-    await school.click();
-
-
-
-    const continueButton =
-      page.getByRole(
-        "button",
-        {
-          name:/continue/i
-        }
+      console.log(
+        "[Sparx] Exact school result found."
       );
 
+      await school.click();
+
+      console.log(
+        "[Sparx] School clicked."
+      );
+    } catch {
+      console.log(
+        "[Sparx] Could not find exact school result."
+      );
+
+      const text =
+        await page
+          .locator("body")
+          .innerText()
+          .catch(() => "");
+
+      console.log(
+        "[Sparx] Current page text:"
+      );
+
+      console.log(
+        text.slice(0, 5000)
+      );
+
+      return {
+        success: false,
+        error:
+          `School "${schoolName}" was not found`
+      };
+    }
+
+    const continueButton =
+      page
+        .getByRole(
+          "button",
+          {
+            name: /^continue$/i
+          }
+        )
+        .first();
 
     await continueButton.waitFor({
-      state:"visible",
-      timeout:10000
+      state: "visible",
+      timeout: 10000
     });
 
-
+    console.log(
+      "[Sparx] Continue button found."
+    );
 
     await this.acceptCookies();
-
 
     await continueButton.click();
 
-
-
-    await page.waitForLoadState(
-      "networkidle"
+    console.log(
+      "[Sparx] Continue clicked."
     );
 
+    await page.waitForTimeout(
+      2000
+    );
+
+    console.log(
+      `[Sparx] After school selection: ${page.url()}`
+    );
+
+    console.log(
+      `[Sparx] New page title: ${await page.title()}`
+    );
 
     return {
-      success:true,
-      schoolSelected:schoolName
+      success: true,
+      schoolSelected:
+        schoolName,
+      url:
+        page.url()
     };
   }
 
+  // ============================================================
+  // LOGIN PAGE INSPECTION
+  // ============================================================
 
+  async inspectLogin() {
+    const page =
+      this.getPage();
 
+    if (!page) {
+      throw new Error(
+        "Sparx page is unavailable."
+      );
+    }
 
-  async enterUsername(username) {
+    await page
+      .waitForLoadState(
+        "networkidle"
+      )
+      .catch(() => {});
 
-    const page = this.getPage();
+    return {
+      success: true,
 
-    await this.acceptCookies();
+      url:
+        page.url(),
 
+      title:
+        await page.title(),
+
+      inputs:
+        await page
+          .locator("input")
+          .evaluateAll(
+            elements =>
+              elements.map(
+                input => ({
+                  type:
+                    input.type,
+                  name:
+                    input.name,
+                  id:
+                    input.id,
+                  placeholder:
+                    input.placeholder
+                })
+              )
+          ),
+
+      buttons:
+        await page
+          .locator("button")
+          .allTextContents()
+    };
+  }
+
+  // ============================================================
+  // NORMAL SPARX USERNAME
+  // ============================================================
+
+  async enterUsername(
+    username
+  ) {
+    const page =
+      this.getPage();
+
+    if (!page) {
+      throw new Error(
+        "Sparx page is unavailable."
+      );
+    }
+
+    if (!username) {
+      throw new Error(
+        "Username was not provided."
+      );
+    }
+
+    console.log(
+      `[Sparx] Entering username: ${username}`
+    );
 
     const input =
-      page.locator(
-        "#username"
-      );
-
+      page
+        .locator(
+          'input[name="username"]'
+        )
+        .first();
 
     await input.waitFor({
-      state:"visible",
-      timeout:10000
+      state: "visible",
+      timeout: 15000
     });
-
 
     await input.fill(
       username
     );
 
+    console.log(
+      "[Sparx] Username entered."
+    );
 
     return {
-      success:true
+      success: true
     };
   }
 
+  // ============================================================
+  // NORMAL SPARX PASSWORD
+  // ============================================================
 
+  async enterPassword(
+    password
+  ) {
+    const page =
+      this.getPage();
 
+    if (!page) {
+      throw new Error(
+        "Sparx page is unavailable."
+      );
+    }
 
+    if (!password) {
+      throw new Error(
+        "Password was not provided."
+      );
+    }
 
-  async enterPassword(password) {
-
-    const page = this.getPage();
-
-    await this.acceptCookies();
-
+    console.log(
+      "[Sparx] Entering password..."
+    );
 
     const input =
-      page.locator(
-        "#password"
-      );
-
+      page
+        .locator(
+          'input[name="password"]'
+        )
+        .first();
 
     await input.waitFor({
-      state:"visible",
-      timeout:10000
+      state: "visible",
+      timeout: 15000
     });
-
 
     await input.fill(
       password
     );
 
+    console.log(
+      "[Sparx] Password entered."
+    );
 
     return {
-      success:true
+      success: true
     };
   }
 
-
-
-
+  // ============================================================
+  // NORMAL SPARX LOGIN
+  // ============================================================
 
   async submitLogin() {
+    const page =
+      this.getPage();
 
-    const page = this.getPage();
+    if (!page) {
+      throw new Error(
+        "Sparx page is unavailable."
+      );
+    }
 
+    console.log(
+      "[Sparx] Submitting login..."
+    );
 
-    await this.acceptCookies();
+    const loginButton =
+      page
+        .getByRole(
+          "button",
+          {
+            name: /^log in$/i
+          }
+        )
+        .first();
 
-
-    const button =
-      page.getByRole(
-        "button",
-        {
-          name:/log in/i
-        }
-      ).last();
-
-
-
-    await button.waitFor({
-      state:"visible",
-      timeout:10000
+    await loginButton.waitFor({
+      state: "visible",
+      timeout: 10000
     });
 
+    await loginButton.click();
 
-
-    await button.click();
-
+    console.log(
+      "[Sparx] Login button clicked."
+    );
 
     await page.waitForTimeout(
       3000
     );
 
+    await page
+      .waitForLoadState(
+        "domcontentloaded"
+      )
+      .catch(() => {});
 
-    return {
-      success:true
-    };
-  }
-
-
-
-
-
-  async loginWithMicrosoft() {
-
-    const page = this.getPage();
-
-
-    await this.acceptCookies();
-
-
-    const button =
-      page.getByRole(
-        "button",
-        {
-          name:/Log in to Sparx using Microsoft/i
-        }
-      );
-
-
-    await button.waitFor({
-      state:"visible",
-      timeout:10000
-    });
-
-
-    await button.click();
-
-
-    return {
-      success:true,
-      method:"microsoft",
-      message:"Microsoft login opened"
-    };
-  }
-
-
-
-
-
-  async isLoggedIn() {
-
-    const page = this.getPage();
-
-
-    const url =
-      page.url();
-
-
-    return !url.includes(
-      "login"
+    console.log(
+      `[Sparx] URL after login: ${page.url()}`
     );
+
+    console.log(
+      `[Sparx] Title after login: ${await page.title()}`
+    );
+
+    return {
+      success: true,
+      url:
+        page.url()
+    };
   }
 
+  // ============================================================
+  // MICROSOFT LOGIN
+  // ============================================================
 
-
-
-
-  async inspectLogin() {
-
+  async loginWithMicrosoft({
+    email
+  } = {}) {
     const page =
       this.getPage();
 
+    if (!page) {
+      throw new Error(
+        "Sparx page is unavailable."
+      );
+    }
 
-    await page.waitForLoadState(
-      "networkidle"
+    console.log(
+      "[Sparx] Starting Microsoft login..."
     );
 
+    const microsoftButton =
+      page
+        .getByRole(
+          "button",
+          {
+            name:
+              /log in to sparx using microsoft/i
+          }
+        )
+        .first();
+
+    await microsoftButton.waitFor({
+      state: "visible",
+      timeout: 15000
+    });
+
+    console.log(
+      "[Sparx] Microsoft login button found."
+    );
+
+    const pagesBefore =
+      page
+        .context()
+        .pages();
+
+    await microsoftButton.click();
+
+    console.log(
+      "[Sparx] Microsoft login button clicked."
+    );
+
+    await page.waitForTimeout(
+      3000
+    );
+
+    let loginPage =
+      page;
+
+    const pagesAfter =
+      page
+        .context()
+        .pages();
+
+    if (
+      pagesAfter.length >
+      pagesBefore.length
+    ) {
+      loginPage =
+        pagesAfter[
+          pagesAfter.length - 1
+        ];
+
+      console.log(
+        "[Sparx] Microsoft opened a new page."
+      );
+    }
+
+    await loginPage
+      .waitForLoadState(
+        "domcontentloaded"
+      )
+      .catch(() => {});
+
+    console.log(
+      `[Sparx] Microsoft page: ${loginPage.url()}`
+    );
+
+    console.log(
+      `[Sparx] Microsoft title: ${await loginPage.title()}`
+    );
+
+    // ----------------------------------------------------------
+    // OPTIONAL EMAIL
+    // ----------------------------------------------------------
+
+    if (email) {
+      const emailInput =
+        loginPage
+          .locator(
+            'input[type="email"], input[name="loginfmt"]'
+          )
+          .first();
+
+      if (
+        await emailInput.count() > 0 &&
+        await emailInput
+          .isVisible()
+          .catch(() => false)
+      ) {
+        await emailInput.fill(
+          email
+        );
+
+        console.log(
+          "[Sparx] Microsoft email entered."
+        );
+
+        const nextButton =
+          loginPage
+            .getByRole(
+              "button",
+              {
+                name: /next/i
+              }
+            )
+            .first();
+
+        if (
+          await nextButton.count() > 0 &&
+          await nextButton
+            .isVisible()
+            .catch(() => false)
+        ) {
+          await nextButton.click();
+
+          console.log(
+            "[Sparx] Microsoft Next clicked."
+          );
+        }
+      }
+    }
+
+    console.log(
+      "[Sparx] Complete Microsoft authentication in the browser."
+    );
+
+    // Give the user time to interact with the authentication flow.
+    await loginPage.waitForTimeout(
+      10000
+    );
+
+    let loggedIn =
+      await this.isLoggedIn(
+        loginPage
+      );
+
+    if (!loggedIn) {
+      console.log(
+        "[Sparx] Microsoft authentication has not completed yet."
+      );
+
+      console.log(
+        "[Sparx] Waiting for authentication redirect..."
+      );
+
+      try {
+        await loginPage.waitForURL(
+          url =>
+            url
+              .toString()
+              .includes(
+                "maths.sparx-learning.com/student/"
+              ),
+          {
+            timeout: 60000
+          }
+        );
+      } catch {
+        console.log(
+          "[Sparx] No Sparx redirect detected within 60 seconds."
+        );
+      }
+
+      loggedIn =
+        await this.isLoggedIn(
+          loginPage
+        );
+    }
+
+    console.log(
+      `[Sparx] Microsoft login successful: ${loggedIn}`
+    );
 
     return {
-      success:true,
-      url:page.url(),
-      title:await page.title(),
-
-      inputs:
-        await page.locator("input")
-        .evaluateAll(
-          elements =>
-            elements.map(
-              input => ({
-                type:input.type,
-                name:input.name,
-                id:input.id,
-                placeholder:input.placeholder
-              })
-            )
-        ),
-
-      buttons:
-        await page.locator("button")
-        .allTextContents()
+      success:
+        loggedIn,
+      loggedIn,
+      method:
+        "microsoft",
+      url:
+        loginPage.url()
     };
   }
 
+  // ============================================================
+  // LOGIN STATUS
+  // ============================================================
 
+  async isLoggedIn(
+    targetPage = null
+  ) {
+    const page =
+      targetPage ||
+      this.getPage();
 
+    if (!page) {
+      return false;
+    }
 
+    const url =
+      page
+        .url()
+        .toLowerCase();
 
-  async healthCheck() {
+    const title =
+      (
+        await page
+          .title()
+          .catch(() => "")
+      ).toLowerCase();
 
-    return await this.getSiteInfo();
+    const isAuthDomain =
+      url.includes(
+        "auth.sparx-learning.com"
+      );
 
+    const isStudentDomain =
+      url.includes(
+        "maths.sparx-learning.com/student/"
+      );
+
+    const loginIndicators = [
+      "log in",
+      "login",
+      "username",
+      "password",
+      "sparx maths login"
+    ];
+
+    const pageText =
+      await page
+        .locator("body")
+        .innerText()
+        .catch(() => "");
+
+    const lowerText =
+      pageText.toLowerCase();
+
+    const hasLoginIndicator =
+      loginIndicators.some(
+        indicator =>
+          lowerText.includes(
+            indicator
+          )
+      );
+
+    const loggedIn =
+      !isAuthDomain &&
+      isStudentDomain &&
+      !hasLoginIndicator;
+
+    console.log(
+      `[Sparx] Auth domain: ${isAuthDomain}`
+    );
+
+    console.log(
+      `[Sparx] Student domain: ${isStudentDomain}`
+    );
+
+    console.log(
+      `[Sparx] Login indicators: ${hasLoginIndicator}`
+    );
+
+    console.log(
+      `[Sparx] Current title: ${title}`
+    );
+
+    console.log(
+      `[Sparx] Current URL: ${url}`
+    );
+
+    console.log(
+      `[Sparx] Logged in: ${loggedIn}`
+    );
+
+    return loggedIn;
   }
 
-}
+  // ============================================================
+  // HEALTH CHECK
+  // ============================================================
 
+  async healthCheck() {
+    return await this.getSiteInfo();
+  }
+}
 
 export default SparxClient;
