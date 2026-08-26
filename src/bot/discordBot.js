@@ -15,7 +15,10 @@ import {
   ButtonBuilder,
   ButtonStyle,
   ChannelType,
-  PermissionFlagsBits
+  PermissionFlagsBits,
+  ContainerBuilder,
+  TextDisplayBuilder,
+  SectionBuilder
 } from "discord.js";
 
 import {
@@ -234,24 +237,12 @@ setupReadyHandler() {
               return;
             }
 
-            if (
+                        if (
               interaction.customId.startsWith(
                 "cookie_login_"
               )
             ) {
               await this.handleCookieModalSubmit(
-                interaction
-              );
-
-              return;
-            }
-
-            if (
-              interaction.customId.startsWith(
-                "verification_captcha_"
-              )
-            ) {
-              await this.handleVerificationCaptcha(
                 interaction
               );
 
@@ -527,19 +518,33 @@ setupReadyHandler() {
     });
   }
 
+    // ==========================================================
+  // WEBSITE VERIFICATION PANEL
   // ==========================================================
-  // 3-STEP VERIFICATION SYSTEM
-  // ==========================================================
   //
-  // STEP 1:
-  // User clicks "Start Verification".
+  // Verification is handled by:
   //
-  // STEP 2:
-  // User completes a generated captcha through a modal.
+  // Discord
+  //   ↓
+  // Components V2 panel
+  //   ↓
+  // Verify on Website
   //
-  // STEP 3:
-  // Bot assigns the Verified role.
+  // Website
+  //   ↓
+  // Cloudflare Turnstile
+  //   ↓
+  // NexusAI Challenge
+  //   ↓
+  // Discord OAuth
   //
+  // Cloudflare Worker
+  //   ↓
+  // 30-day account-age check
+  //   ↓
+  // Verified role
+  //
+  // The Discord bot NEVER assigns the Verified role.
   // ==========================================================
 
   async sendVerificationPanel() {
@@ -581,422 +586,221 @@ setupReadyHandler() {
       return null;
     }
 
-    /*
-     * Remove previous bot verification panels only.
-     *
-     * This avoids deleting messages belonging to users.
-     */
+    // ========================================================
+    // CLEAN OLD VERIFICATION PANELS
+    // ========================================================
+
     try {
       const messages =
         await channel.messages.fetch({
-          limit: 100
+          limit:
+            100
         });
 
-      const botMessages =
+      const oldPanels =
         messages.filter(
-          message =>
-            message.author?.id ===
-              this.client.user?.id &&
-            message.embeds?.some(
-              embed =>
-                embed.title ===
-                "🛡️ NexusAI Verification"
-            )
+          message => {
+            /*
+             * NEVER delete messages belonging to users.
+             */
+            if (
+              message.author?.id !==
+              this.client.user?.id
+            ) {
+              return false;
+            }
+
+            /*
+             * Old EmbedBuilder verification panel.
+             */
+            const oldEmbed =
+              message.embeds?.some(
+                embed =>
+                  embed.title ===
+                  "🛡️ NexusAI Verification"
+              );
+
+            /*
+             * Old Discord verification buttons.
+             */
+            const oldVerificationButton =
+              message.components?.some(
+                row =>
+                  row.components?.some(
+                    component =>
+                      [
+                        "verification_start",
+                        "verification_step1",
+                        "verification_step2",
+                        "verification_step3"
+                      ].includes(
+                        component.customId
+                      )
+                  )
+              );
+
+            /*
+             * Old verification text.
+             */
+            const oldText =
+              message.content?.includes(
+                "Start Verification"
+              ) ||
+              message.content?.includes(
+                "Verify on Website"
+              );
+
+            return (
+              oldEmbed ||
+              oldVerificationButton ||
+              oldText
+            );
+          }
         );
 
       for (
         const message of
-          botMessages.values()
+          oldPanels.values()
       ) {
         await message
           .delete()
-          .catch(() => {});
+          .catch(
+            () => {}
+          );
       }
-    } catch (error) {
+    } catch (
+      error
+    ) {
       logger.warn(
         {
           error:
             error?.message,
+
           channelId:
             VERIFICATION_CHANNEL_ID
         },
-        "Could not clean previous verification panel"
+        "Could not clean previous verification panels"
       );
     }
 
-    const embed =
-      new EmbedBuilder()
-        .setColor("#5865F2")
-        .setTitle(
-          "🛡️ NexusAI Verification"
-        )
-        .setDescription(
-          [
-            "Welcome to **NexusAI**!",
-            "",
-            "Before accessing the server, please complete the verification process.",
-            "",
-            "**Step 1 — Start**",
-            "Click **Start Verification** below.",
-            "",
-            "**Step 2 — Security Check**",
-            "Complete the verification challenge shown to you.",
-            "",
-            "**Step 3 — Verified**",
-            "Once successful, you'll receive the **Verified** role.",
-            "",
-            "🔒 Your verification is private.",
-            "🛡️ Never share passwords or account credentials with anyone."
-          ].join("\n")
-        )
-        .setFooter({
-          text:
-            "NexusAI • Secure Server Verification"
-        })
-        .setTimestamp();
+    // ========================================================
+    // COMPONENTS V2 PANEL
+    // ========================================================
 
-    const row =
-      new ActionRowBuilder()
-        .addComponents(
-          new ButtonBuilder()
-            .setCustomId(
-              "verification_start"
+    const container =
+      new ContainerBuilder()
+        .setAccentColor(
+          0x5865F2
+        )
+
+        .addTextDisplayComponents(
+          new TextDisplayBuilder()
+            .setContent(
+              [
+                "# 🛡️ NexusAI Verification",
+                "",
+                "Welcome to **NexusAI**!",
+                "",
+                "Before accessing the verified areas of the server, please complete our secure verification process."
+              ].join(
+                "\n"
+              )
             )
-            .setLabel(
-              "Start Verification"
+        )
+
+        .addSeparatorComponents()
+
+        .addTextDisplayComponents(
+          new TextDisplayBuilder()
+            .setContent(
+              [
+                "## 🔐 Verification Process",
+                "",
+                "① **Open the verification website**",
+                "② **Complete Cloudflare Turnstile**",
+                "③ **Complete the NexusAI security challenge**",
+                "④ **Connect your Discord account**",
+                "⑤ **Receive the Verified role automatically**"
+              ].join(
+                "\n"
+              )
             )
-            .setEmoji("🛡️")
-            .setStyle(
-              ButtonStyle.Primary
+        )
+
+        .addSeparatorComponents()
+
+        .addSectionComponents(
+          new SectionBuilder()
+            .addTextDisplayComponents(
+              new TextDisplayBuilder()
+                .setContent(
+                  [
+                    "**Ready to verify?**",
+                    "",
+                    "Click the button below to open the secure NexusAI verification website."
+                  ].join(
+                    "\n"
+                  )
+                )
+            )
+
+            .setButtonAccessory(
+              new ButtonBuilder()
+                .setLabel(
+                  "Verify on Website"
+                )
+
+                .setEmoji(
+                  "🛡️"
+                )
+
+                .setStyle(
+                  ButtonStyle.Link
+                )
+
+                .setURL(
+                  VERIFICATION_WEBSITE_URL
+                )
+            )
+        )
+
+        .addSeparatorComponents()
+
+        .addTextDisplayComponents(
+          new TextDisplayBuilder()
+            .setContent(
+              [
+                "🔒 **Security**",
+                "",
+                "NexusAI will never ask for your Discord password, Discord token, or authentication credentials."
+              ].join(
+                "\n"
+              )
             )
         );
 
     const message =
       await channel.send({
-        embeds: [
-          embed
-        ],
         components: [
-          row
-        ]
+          container
+        ],
+
+        flags:
+          MessageFlags.IsComponentsV2
       });
 
     logger.info(
       {
         channelId:
           VERIFICATION_CHANNEL_ID,
+
         messageId:
           message.id
       },
-      "✅ Verification panel sent"
+      "✅ Website verification panel sent"
     );
 
     return message;
-  }
-
-  // ==========================================================
-  // VERIFICATION STEP 1
-  // ==========================================================
-
-  async startVerification(
-    interaction
-  ) {
-    const userId =
-      interaction.user.id;
-
-    /*
-     * Already verified?
-     */
-    if (
-      interaction.guild &&
-      VERIFIED_ROLE_ID
-    ) {
-      const member =
-        await interaction.guild.members
-          .fetch(userId)
-          .catch(
-            () => null
-          );
-
-      if (
-        member?.roles.cache.has(
-          VERIFIED_ROLE_ID
-        )
-      ) {
-        return interaction.reply({
-          content:
-            "✅ You are already verified.",
-          flags:
-            MessageFlags.Ephemeral
-        });
-      }
-    }
-
-    /*
-     * Generate a simple temporary challenge.
-     */
-    const first =
-      Math.floor(
-        Math.random() * 9
-      ) + 1;
-
-    const second =
-      Math.floor(
-        Math.random() * 9
-      ) + 1;
-
-    const answer =
-      String(
-        first + second
-      );
-
-    this.verificationSessions.set(
-      userId,
-      {
-        step:
-          2,
-        answer,
-        createdAt:
-          Date.now()
-      }
-    );
-
-    /*
-     * Automatically expire after 5 minutes.
-     */
-    setTimeout(
-      () => {
-        const session =
-          this.verificationSessions.get(
-            userId
-          );
-
-        if (
-          session &&
-          session.answer ===
-            answer
-        ) {
-          this.verificationSessions.delete(
-            userId
-          );
-        }
-      },
-      300000
-    );
-
-    const modal =
-      new ModalBuilder()
-        .setCustomId(
-          `verification_captcha_${userId}`
-        )
-        .setTitle(
-          "🛡️ NexusAI Security Check"
-        );
-
-    const answerInput =
-      new TextInputBuilder()
-        .setCustomId(
-          "captcha_answer"
-        )
-        .setLabel(
-          `What is ${first} + ${second}?`
-        )
-        .setPlaceholder(
-          "Enter the answer"
-        )
-        .setStyle(
-          TextInputStyle.Short
-        )
-        .setRequired(
-          true
-        )
-        .setMaxLength(
-          3
-        );
-
-    modal.addComponents(
-      new ActionRowBuilder()
-        .addComponents(
-          answerInput
-        )
-    );
-
-    await interaction.showModal(
-      modal
-    );
-  }
-
-  // ==========================================================
-  // VERIFICATION STEP 2
-  // ==========================================================
-
-  async handleVerificationCaptcha(
-    interaction
-  ) {
-    const userId =
-      interaction.user.id;
-
-    const session =
-      this.verificationSessions.get(
-        userId
-      );
-
-    if (!session) {
-      return interaction.reply({
-        content:
-          "❌ Your verification session has expired. Please start again.",
-        flags:
-          MessageFlags.Ephemeral
-      });
-    }
-
-    if (
-      session.step !== 2
-    ) {
-      return interaction.reply({
-        content:
-          "❌ Your verification session is invalid. Please start again.",
-        flags:
-          MessageFlags.Ephemeral
-      });
-    }
-
-    const submitted =
-      interaction.fields
-        .getTextInputValue(
-          "captcha_answer"
-        )
-        .trim();
-
-    if (
-      submitted !==
-      session.answer
-    ) {
-      this.verificationSessions.delete(
-        userId
-      );
-
-      return interaction.reply({
-        content:
-          "❌ Verification failed. Please start the verification process again.",
-        flags:
-          MessageFlags.Ephemeral
-      });
-    }
-
-    /*
-     * Move to step 3.
-     */
-    session.step = 3;
-
-    await interaction.deferReply({
-      flags:
-        MessageFlags.Ephemeral
-    });
-
-    if (
-      !interaction.guild
-    ) {
-      this.verificationSessions.delete(
-        userId
-      );
-
-      return interaction.editReply({
-        content:
-          "❌ Verification must be completed inside the server."
-      });
-    }
-
-    if (
-      !VERIFIED_ROLE_ID
-    ) {
-      this.verificationSessions.delete(
-        userId
-      );
-
-      return interaction.editReply({
-        content:
-          "⚠️ The verification system is not configured yet. Please set `VERIFIED_ROLE_ID` in `.env`."
-      });
-    }
-
-    /*
-     * Get guild member.
-     */
-    const member =
-      await interaction.guild.members
-        .fetch(userId)
-        .catch(
-          () => null
-        );
-
-    if (!member) {
-      this.verificationSessions.delete(
-        userId
-      );
-
-      return interaction.editReply({
-        content:
-          "❌ Your server member record could not be found."
-      });
-    }
-
-    /*
-     * STEP 3:
-     * Add Verified role.
-     */
-    try {
-      await member.roles.add(
-        VERIFIED_ROLE_ID,
-        "Completed NexusAI 3-step verification"
-      );
-
-      this.verificationSessions.delete(
-        userId
-      );
-
-      logger.info(
-        {
-          userId,
-          username:
-            interaction.user.username,
-          guildId:
-            interaction.guild.id,
-          roleId:
-            VERIFIED_ROLE_ID
-        },
-        "✅ User completed verification"
-      );
-
-      await interaction.editReply({
-        content:
-          "✅ **Verification complete!**\n\nYou have passed the security check and received the **Verified** role."
-      });
-    } catch (error) {
-      logger.error(
-        {
-          userId,
-          guildId:
-            interaction.guild.id,
-          roleId:
-            VERIFIED_ROLE_ID,
-          error:
-            error?.message,
-          stack:
-            error?.stack
-        },
-        "Failed to assign verified role"
-      );
-
-      this.verificationSessions.delete(
-        userId
-      );
-
-      await interaction.editReply({
-        content:
-          "❌ Verification succeeded, but I could not assign the Verified role. Please check my role permissions and hierarchy."
-      });
-    }
   }
 
     // ==========================================================
@@ -1534,86 +1338,22 @@ setupReadyHandler() {
         );
 
       case "ping":
-        return this.replyToChannel(
-          message,
-          `🏓 Pong! ${this.client.ws.ping}ms`
-        );
+  return this.replyToChannel(
+    message,
+    `🏓 Pong! ${this.client.ws.ping}ms`
+  );
 
-      case "verify":
-        /*
-         * Manual verification command.
-         */
-        return this.startManualVerificationCommand(
-          message
-        );
-
-      default:
-        return this.replyToChannel(
-          message,
-          "❓ Unknown command. Use `!help`"
-        );
-    }
-  }
-
-  // ==========================================================
-  // MANUAL VERIFICATION COMMAND
-  // ==========================================================
-
-  async startManualVerificationCommand(
+case "verify":
+  return this.handleVerifyCommand(
     message
-  ) {
-    if (
-      !message.guild
-    ) {
-      return message.reply(
-        "❌ Verification can only be started inside a server."
-      );
-    }
+  );
 
-    /*
-     * We cannot directly show a modal from a normal
-     * message, so send the user to the verification
-     * panel instead.
-     */
-
-    const embed =
-      new EmbedBuilder()
-        .setColor(
-          "#5865F2"
-        )
-        .setTitle(
-          "🛡️ Verification"
-        )
-        .setDescription(
-          "Click the button below to begin verification."
-        );
-
-    const row =
-      new ActionRowBuilder()
-        .addComponents(
-          new ButtonBuilder()
-            .setCustomId(
-              "verification_start"
-            )
-            .setLabel(
-              "Start Verification"
-            )
-            .setEmoji(
-              "🛡️"
-            )
-            .setStyle(
-              ButtonStyle.Primary
-            )
-        );
-
-    return message.reply({
-      embeds: [
-        embed
-      ],
-      components: [
-        row
-      ]
-    });
+default:
+  return this.replyToChannel(
+    message,
+    "❓ Unknown command. Use `!help`"
+  );
+}
   }
 
   // ==========================================================
@@ -2095,44 +1835,35 @@ setupReadyHandler() {
     );
 
     // ========================================================
-    // 3-STEP VERIFICATION
-    // ========================================================
+// OLD VERIFICATION BUTTON DEFENSE
+// ========================================================
+//
+// These IDs may still exist on old Discord messages.
+// They are intentionally rejected instead of starting
+// the old Discord-side verification system.
+//
 
-    if (
-      customId ===
-      "verification_start"
-    ) {
-      return this.startVerification(
-        interaction
-      );
-    }
+if (
+  [
+    "verification_start",
+    "verification_step1",
+    "verification_step2",
+    "verification_step3"
+  ].includes(
+    customId
+  )
+) {
+  return this.respondToInteraction(
+    interaction,
+    {
+      content:
+        "🔗 Verification has moved to the NexusAI website. Please use the **Verify on Website** button in the verification channel.",
 
-    if (
-      customId ===
-      "verification_step1"
-    ) {
-      return this.handleVerificationStep1(
-        interaction
-      );
+      flags:
+        MessageFlags.Ephemeral
     }
-
-    if (
-      customId ===
-      "verification_step2"
-    ) {
-      return this.handleVerificationStep2(
-        interaction
-      );
-    }
-
-    if (
-      customId ===
-      "verification_step3"
-    ) {
-      return this.handleVerificationStep3(
-        interaction
-      );
-    }
+  );
+}
 
     // ========================================================
     // SPLIT BUTTON ID
@@ -3351,594 +3082,6 @@ setupReadyHandler() {
     }
   }
 
-    // ==========================================================
-  // 3-STEP VERIFICATION SYSTEM
-  // ==========================================================
-
-  async sendVerificationPanel() {
-    const channelId =
-      "1519734400730796252";
-
-    const channel =
-      await this.client.channels
-        .fetch(channelId)
-        .catch(() => null);
-
-    if (!channel) {
-      logger.error(
-        {
-          channelId
-        },
-        "Verification channel could not be found"
-      );
-
-      return null;
-    }
-
-    const embed =
-      new EmbedBuilder()
-        .setColor("#5865F2")
-        .setTitle(
-          "🛡️ NexusAI Verification"
-        )
-        .setDescription(
-          [
-            "Welcome to **NexusAI**.",
-            "",
-            "Before you can access the server, you must complete our **3-step verification process**.",
-            "",
-            "### 🔐 Verification Process",
-            "",
-            "① **Start Verification**",
-            "> Begin the verification process.",
-            "",
-            "② **Security Check**",
-            "> Complete the verification challenge.",
-            "",
-            "③ **Final Confirmation**",
-            "> Confirm that you have completed the verification.",
-            "",
-            "After all three steps are successfully completed, you will receive the verified role.",
-            "",
-            "🔒 **Never share passwords, tokens, or account credentials during verification.**"
-          ].join("\n")
-        )
-        .setFooter({
-          text:
-            "🥭 NexusAI • Secure Verification"
-        })
-        .setTimestamp();
-
-    const row =
-      new ActionRowBuilder()
-        .addComponents(
-          new ButtonBuilder()
-            .setCustomId(
-              "verification_start"
-            )
-            .setLabel(
-              "Start Verification"
-            )
-            .setEmoji(
-              "🔐"
-            )
-            .setStyle(
-              ButtonStyle.Primary
-            )
-        );
-
-    return channel.send({
-      embeds: [
-        embed
-      ],
-      components: [
-        row
-      ]
-    });
-  }
-
-  // ==========================================================
-  // START VERIFICATION
-  // ==========================================================
-
-  async startVerification(
-    interaction
-  ) {
-    const userId =
-      interaction.user.id;
-
-    const state =
-      this.getVerificationState(
-        userId
-      );
-
-    if (
-      state.completed
-    ) {
-      return this.respondToInteraction(
-        interaction,
-        {
-          content:
-            "✅ You are already verified.",
-          flags:
-            MessageFlags.Ephemeral
-        }
-      );
-    }
-
-    state.started = true;
-    state.step = 1;
-
-    return this.respondToInteraction(
-      interaction,
-      {
-        embeds: [
-          new EmbedBuilder()
-            .setColor(
-              "#5865F2"
-            )
-            .setTitle(
-              "🔐 Verification — Step 1/3"
-            )
-            .setDescription(
-              [
-                `Hello **${interaction.user.username}**!`,
-                "",
-                "Your first step is to confirm that you are ready to continue.",
-                "",
-                "Click **Continue** below to proceed to Step 2.",
-                "",
-                "### Progress",
-                "✅ Step 1 started",
-                "⬜ Step 2",
-                "⬜ Step 3"
-              ].join("\n")
-            )
-            .setFooter({
-              text:
-                "NexusAI Verification • 1/3"
-            })
-        ],
-        components: [
-          new ActionRowBuilder()
-            .addComponents(
-              new ButtonBuilder()
-                .setCustomId(
-                  "verification_step1"
-                )
-                .setLabel(
-                  "Continue"
-                )
-                .setEmoji(
-                  "➡️"
-                )
-                .setStyle(
-                  ButtonStyle.Primary
-                )
-            )
-        ],
-        flags:
-          MessageFlags.Ephemeral
-      }
-    );
-  }
-
-  // ==========================================================
-  // VERIFICATION STATE
-  // ==========================================================
-
-  getVerificationState(
-    userId
-  ) {
-    if (
-      !this.verificationStates
-    ) {
-      this.verificationStates =
-        new Map();
-    }
-
-    let state =
-      this.verificationStates.get(
-        userId
-      );
-
-    if (!state) {
-      state = {
-        started:
-          false,
-        step:
-          0,
-        completed:
-          false,
-        startedAt:
-          Date.now()
-      };
-
-      this.verificationStates.set(
-        userId,
-        state
-      );
-    }
-
-    return state;
-  }
-
-  // ==========================================================
-  // VERIFICATION STEP 1
-  // ==========================================================
-
-  async handleVerificationStep1(
-    interaction
-  ) {
-    const state =
-      this.getVerificationState(
-        interaction.user.id
-      );
-
-    if (
-      !state.started
-    ) {
-      return this.respondToInteraction(
-        interaction,
-        {
-          content:
-            "❌ Please start verification first.",
-          flags:
-            MessageFlags.Ephemeral
-        }
-      );
-    }
-
-    state.step = 2;
-
-    return this.respondToInteraction(
-      interaction,
-      {
-        embeds: [
-          new EmbedBuilder()
-            .setColor(
-              "#FAA61A"
-            )
-            .setTitle(
-              "🧩 Verification — Step 2/3"
-            )
-            .setDescription(
-              [
-                "### Security Check",
-                "",
-                "To continue, confirm that you understand the following:",
-                "",
-                "> **NexusAI will never ask you for your Discord password or authentication token.**",
-                "",
-                "Click **I Understand** to continue.",
-                "",
-                "### Progress",
-                "✅ Step 1",
-                "✅ Step 2 started",
-                "⬜ Step 3"
-              ].join("\n")
-            )
-            .setFooter({
-              text:
-                "NexusAI Verification • 2/3"
-            })
-        ],
-        components: [
-          new ActionRowBuilder()
-            .addComponents(
-              new ButtonBuilder()
-                .setCustomId(
-                  "verification_step2"
-                )
-                .setLabel(
-                  "I Understand"
-                )
-                .setEmoji(
-                  "✅"
-                )
-                .setStyle(
-                  ButtonStyle.Success
-                )
-            )
-        ],
-        flags:
-          MessageFlags.Ephemeral
-      }
-    );
-  }
-
-  // ==========================================================
-  // VERIFICATION STEP 2
-  // ==========================================================
-
-  async handleVerificationStep2(
-    interaction
-  ) {
-    const state =
-      this.getVerificationState(
-        interaction.user.id
-      );
-
-    if (
-      !state.started ||
-      state.step < 2
-    ) {
-      return this.respondToInteraction(
-        interaction,
-        {
-          content:
-            "❌ Please complete the verification steps in order.",
-          flags:
-            MessageFlags.Ephemeral
-        }
-      );
-    }
-
-    state.step = 3;
-
-    return this.respondToInteraction(
-      interaction,
-      {
-        embeds: [
-          new EmbedBuilder()
-            .setColor(
-              "#57F287"
-            )
-            .setTitle(
-              "✅ Verification — Step 3/3"
-            )
-            .setDescription(
-              [
-                "You have completed the security check.",
-                "",
-                "Click **Complete Verification** to finish.",
-                "",
-                "### Progress",
-                "✅ Step 1",
-                "✅ Step 2",
-                "✅ Step 3 ready"
-              ].join("\n")
-            )
-            .setFooter({
-              text:
-                "NexusAI Verification • 3/3"
-            })
-        ],
-        components: [
-          new ActionRowBuilder()
-            .addComponents(
-              new ButtonBuilder()
-                .setCustomId(
-                  "verification_step3"
-                )
-                .setLabel(
-                  "Complete Verification"
-                )
-                .setEmoji(
-                  "🛡️"
-                )
-                .setStyle(
-                  ButtonStyle.Success
-                )
-            )
-        ],
-        flags:
-          MessageFlags.Ephemeral
-      }
-    );
-  }
-
-  // ==========================================================
-// VERIFICATION STEP 3
-// ==========================================================
-
-async handleVerificationStep3(interaction) {
-  const userId = interaction.user.id;
-
-  const state = this.getVerificationState(userId);
-
-  if (!state.started || state.step < 3) {
-    return this.respondToInteraction(interaction, {
-      content:
-        "❌ Please complete the verification steps in order.",
-      flags: MessageFlags.Ephemeral
-    });
-  }
-
-  const guild = interaction.guild;
-
-  if (!guild) {
-    return this.respondToInteraction(interaction, {
-      content:
-        "❌ Verification must be completed inside a server.",
-      flags: MessageFlags.Ephemeral
-    });
-  }
-
-  // ========================================================
-  // GET VERIFIED ROLE
-  // ========================================================
-
-  const configuredRoleId =
-    process.env.VERIFICATION_ROLE_ID ||
-    config.discord.verification?.roleId ||
-    "";
-
-  let verifiedRole = null;
-
-  try {
-    // Prefer the explicitly configured role ID.
-    if (configuredRoleId) {
-      verifiedRole = await guild.roles.fetch(
-        configuredRoleId
-      );
-    }
-
-    // Fallback to a role named "Verified".
-    if (!verifiedRole) {
-      verifiedRole =
-        guild.roles.cache.find(
-          role =>
-            role.name.toLowerCase() ===
-            "verified"
-        );
-    }
-
-    // Create the role only if neither exists.
-    if (!verifiedRole) {
-      verifiedRole =
-        await guild.roles.create({
-          name: "Verified",
-          color: "#57F287",
-          reason:
-            "NexusAI verification system"
-        });
-    }
-  } catch (error) {
-    logger.error(
-      {
-        guildId: guild.id,
-        roleId: configuredRoleId,
-        error: error?.message,
-        stack: error?.stack
-      },
-      "Failed to resolve Verified role"
-    );
-
-    return this.respondToInteraction(interaction, {
-      content:
-        "❌ I could not find or create the Verified role. Make sure NexusAI has **Manage Roles** permission.",
-      flags: MessageFlags.Ephemeral
-    });
-  }
-
-  // ========================================================
-  // RESOLVE MEMBER
-  // ========================================================
-
-  let member;
-
-  try {
-    member =
-      await guild.members.fetch(userId);
-  } catch (error) {
-    logger.error(
-      {
-        guildId: guild.id,
-        userId,
-        error: error?.message
-      },
-      "Failed to fetch member for verification"
-    );
-
-    return this.respondToInteraction(interaction, {
-      content:
-        "❌ I could not find your server membership.",
-      flags: MessageFlags.Ephemeral
-    });
-  }
-
-  // ========================================================
-  // ASSIGN VERIFIED ROLE
-  // ========================================================
-
-  try {
-    logger.info(
-      {
-        guildId: guild.id,
-        userId,
-        roleId: verifiedRole.id,
-        roleName: verifiedRole.name
-      },
-      "Assigning Verified role"
-    );
-
-    await member.roles.add(
-      verifiedRole,
-      "NexusAI 3-step verification completed"
-    );
-
-    logger.info(
-      {
-        guildId: guild.id,
-        userId,
-        roleId: verifiedRole.id
-      },
-      "✅ Verified role assigned successfully"
-    );
-  } catch (error) {
-    logger.error(
-      {
-        guildId: guild.id,
-        userId,
-        roleId: verifiedRole?.id,
-        error: error?.message,
-        stack: error?.stack
-      },
-      "Failed to assign Verified role"
-    );
-
-    return this.respondToInteraction(interaction, {
-      content:
-        "❌ Verification was completed, but I could not assign your Verified role. Make sure NexusAI has **Manage Roles** permission and that its highest role is above the Verified role.",
-      flags: MessageFlags.Ephemeral
-    });
-  }
-
-  // ========================================================
-  // MARK VERIFICATION COMPLETE
-  // ========================================================
-
-  state.completed = true;
-  state.step = 3;
-  state.completedAt = Date.now();
-
-  this.verificationStates.set(
-    userId,
-    state
-  );
-
-  logger.info(
-    {
-      guildId: guild.id,
-      userId,
-      username:
-        interaction.user.username
-    },
-    "✅ User completed 3-step verification"
-  );
-
-  // ========================================================
-  // SUCCESS RESPONSE
-  // ========================================================
-
-  return this.respondToInteraction(interaction, {
-    embeds: [
-      new EmbedBuilder()
-        .setColor("#57F287")
-        .setTitle(
-          "🛡️ Verification Complete"
-        )
-        .setDescription(
-          [
-            `✅ **${interaction.user.username}** has been successfully verified.`,
-            "",
-            "You now have access to the verified areas of the server.",
-            "",
-            "Welcome to **NexusAI**! 🥭"
-          ].join("\n")
-        )
-        .setFooter({
-          text:
-            "NexusAI • Verification Complete"
-        })
-        .setTimestamp()
-    ],
-    components: [],
-    flags: MessageFlags.Ephemeral
-  });
-}
-
   // ==========================================================
   // LOGIN MODAL
   // ==========================================================
@@ -4186,9 +3329,9 @@ async handleVerificationStep3(interaction) {
         );
 
       case "verify":
-        return this.handleVerifyCommand(
-          message
-        );
+  return this.handleVerifyCommand(
+    message
+  );
 
       default:
         return this.replyToChannel(
@@ -4203,33 +3346,109 @@ async handleVerificationStep3(interaction) {
   // ==========================================================
 
   async handleVerifyCommand(
-    message
-  ) {
-    const state =
-      this.getVerificationState(
-        message.author.id
-      );
+  message
+) {
+  const accountAge =
+    getDiscordAccountAge(
+      message.author.id
+    );
 
-    if (
-      state.completed
-    ) {
-      return this.replyToChannel(
-        message,
-        {
-          content:
-            "✅ You are already verified."
-        }
+  /*
+   * Defensive account-age check.
+   *
+   * The Cloudflare Worker performs the authoritative
+   * check before assigning the Verified role.
+   *
+   * The Discord bot itself NEVER assigns the role.
+   */
+
+  if (
+    accountAge &&
+    accountAge.ageDays <
+      MIN_DISCORD_ACCOUNT_AGE_DAYS
+  ) {
+    const remainingDays =
+      Math.max(
+        1,
+        MIN_DISCORD_ACCOUNT_AGE_DAYS -
+          accountAge.ageDays
       );
-    }
 
     return this.replyToChannel(
       message,
       {
-        content:
-          "🔐 Please use the verification panel in the verification channel to begin."
+        embeds: [
+          new EmbedBuilder()
+            .setColor(
+              "#ED4245"
+            )
+            .setTitle(
+              "🚫 Account Too New"
+            )
+            .setDescription(
+              [
+                "Sorry, this Discord account isn't old enough to access this server.",
+                "",
+                `**Account age:** ${accountAge.ageDays} day${
+                  accountAge.ageDays === 1
+                    ? ""
+                    : "s"
+                }`,
+                "**Minimum required:** 30 days (1 month)",
+                "",
+                `Please try again in approximately ${remainingDays} day${
+                  remainingDays === 1
+                    ? ""
+                    : "s"
+                }.`
+              ].join(
+                "\n"
+              )
+            )
+            .setFooter({
+              text:
+                "NexusAI • Server Security"
+            })
+            .setTimestamp()
+        ]
       }
     );
   }
+
+  /*
+   * Eligible users are directed to the website.
+   */
+  return this.replyToChannel(
+    message,
+    {
+      embeds: [
+        new EmbedBuilder()
+          .setColor(
+            "#5865F2"
+          )
+          .setTitle(
+            "🛡️ NexusAI Website Verification"
+          )
+          .setDescription(
+            [
+              "Verification is completed securely through the NexusAI verification website.",
+              "",
+              `🔗 **Verify here:** ${VERIFICATION_WEBSITE_URL}`,
+              "",
+              "The website performs Cloudflare Turnstile, the NexusAI security challenge, Discord authentication, and the final account-age verification."
+            ].join(
+              "\n"
+            )
+          )
+          .setFooter({
+            text:
+              "🥭 NexusAI • Secure Website Verification"
+          })
+          .setTimestamp()
+      ]
+    }
+  );
+}
 
   // ==========================================================
   // HELP
@@ -4898,83 +4117,6 @@ async handleVerificationStep3(interaction) {
       );
 
       throw error;
-    }
-  }
-
-  // ==========================================================
-  // STARTUP VERIFICATION PANEL
-  // ==========================================================
-
-  async sendStartupVerificationPanel() {
-    try {
-      const channelId =
-        "1519734400730796252";
-
-      const channel =
-        await this.client.channels
-          .fetch(channelId)
-          .catch(
-            () => null
-          );
-
-      if (
-        !channel
-      ) {
-        logger.warn(
-          {
-            channelId
-          },
-          "Verification channel not found"
-        );
-
-        return;
-      }
-
-      const messages =
-        await channel.messages.fetch({
-          limit:
-            100
-        });
-
-      const existing =
-        messages.find(
-          message =>
-            message.author?.id ===
-              this.client.user?.id &&
-            message.components?.some(
-              row =>
-                row.components?.some(
-                  component =>
-                    component.customId ===
-                    "verification_start"
-                )
-            )
-        );
-
-      if (
-        existing
-      ) {
-        return;
-      }
-
-      await this.sendVerificationPanel();
-
-      logger.info(
-        {
-          channelId
-        },
-        "✅ Verification panel sent"
-      );
-    } catch (error) {
-      logger.error(
-        {
-          error:
-            error?.message,
-          stack:
-            error?.stack
-        },
-        "Failed to send verification panel"
-      );
     }
   }
 
