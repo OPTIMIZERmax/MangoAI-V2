@@ -22,11 +22,36 @@ import {
 } from "discord.js";
 
 import {
+  sendFAQPanel
+} from "./embeds/FAQ.js";
+
+import {
+  buildArcadePanel,
+  ARCADE_PANEL_MARKER,
+  createArcadePrize,
+  getArcadePoints,
+  hasRole,
+  buildPrizeHubPanel,
+  DEV_ROLE_ID
+} from "./arcade.js";
+
+import {
   ContainerFactory,
   EmbedFactory,
   ActionRowFactory
 } from "./embedFactory.js";
 
+import {
+  TOS_CHANNEL_ID,
+  TOS_VERSION,
+  TOS_TITLE,
+  TOS_TEXT
+  } from "./embeds/TOS.js";
+
+  import {
+  setupWelcomeEvents
+} from "./embeds/Welcome.js";
+ 
 import logger from "../utils/logger.js";
 import config from "../utils/config.js";
 
@@ -47,6 +72,15 @@ const __dirname = path.dirname(__filename);
 const VERIFICATION_CHANNEL_ID =
   "1519734400730796252";
 
+const WELCOME_CHANNEL_ID =
+  "1520540734065737959";
+
+const GOODBYE_CHANNEL_ID =
+  "1521965788872052958";
+
+const VERIFICATION_WEBSITE_URL =
+  "https://optimizermax.github.io/";  
+
 /*
  * Set this in .env:
  *
@@ -58,26 +92,27 @@ const VERIFIED_ROLE_ID =
 export class DiscordBot {
   constructor() {
   this.client = new Client({
-    intents: [
-      GatewayIntentBits.Guilds,
-      GatewayIntentBits.GuildMessages,
-      GatewayIntentBits.DirectMessages,
-      GatewayIntentBits.MessageContent,
-      GatewayIntentBits.GuildPresences
-    ]
-  });
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMembers,
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.DirectMessages,
+    GatewayIntentBits.MessageContent,
+    GatewayIntentBits.GuildPresences
+  ]
+});
 
   // ========================================================
   // APPLICATION STATE
   // ========================================================
 
-  this.commandHandler = null;
   this.app = null;
   this.platformService = null;
   this.loginService = null;
 
   this.activeSessions = new Map();
   this.pendingLogins = new Map();
+  this.arcadePrizeCatalog = [];
 
  // ========================================================
 // VERIFICATION STATE
@@ -108,10 +143,6 @@ this.verificationSessions = new Map();
 // DEPENDENCY INJECTION
 // ==========================================================
 
-setCommandHandler(handler) {
-  this.commandHandler = handler;
-}
-
 setApp(app) {
   this.app = app;
 }
@@ -132,6 +163,10 @@ setupEventHandlers() {
   this.setupReadyHandler();
   this.setupInteractionHandler();
   this.setupMessageHandler();
+  setupWelcomeEvents(
+    this.client,
+    logger
+  );
   this.setupErrorHandler();
 }
 
@@ -140,45 +175,135 @@ setupEventHandlers() {
 // ==========================================================
 
 setupReadyHandler() {
-  this.client.once("clientReady", async () => {
-    try {
-      const username =
-        this.client.user?.username ??
-        "Unknown";
-
-      logger.info(
-        { username },
-        "Discord bot is ready"
-      );
-
-      this.setPresence();
-
-      // ======================================================
-      // VERIFICATION PANEL
-      // ======================================================
-
+  this.client.once(
+    "clientReady",
+    async () => {
       try {
-        await this.sendVerificationPanel();
+        const username =
+          this.client.user?.username ??
+          "Unknown";
+
+        logger.info(
+          {
+            username
+          },
+          "Discord bot is ready"
+        );
+
+        // ======================================================
+        // PRESENCE
+        // ======================================================
+
+        this.setPresence();
+
+        // ======================================================
+        // WEBSITE VERIFICATION PANEL
+        // ======================================================
+
+        try {
+          await this.sendVerificationPanel();
+
+          logger.info(
+            "✅ Website verification panel ready"
+          );
+        } catch (error) {
+          logger.error(
+            {
+              error:
+                error?.message,
+
+              stack:
+                error?.stack
+            },
+            "Failed to send verification panel"
+          );
+        }
+
+        // ======================================================
+        // TERMS OF SERVICE PANEL
+        // ======================================================
+
+        try {
+          await this.sendTosPanel();
+
+          logger.info(
+            "✅ Terms of Service panel ready"
+          );
+        } catch (error) {
+          logger.error(
+            {
+              error:
+                error?.message,
+
+              stack:
+                error?.stack
+            },
+            "Failed to send TOS panel"
+          );
+        }
+
+        // ======================================================
+        // FAQ PANEL
+        // ======================================================
+
+        try {
+          await sendFAQPanel(
+            this.client,
+            logger
+          );
+
+          logger.info(
+            "✅ FAQ panel ready"
+          );
+        } catch (error) {
+          logger.error(
+            {
+              error:
+                error?.message,
+
+              stack:
+                error?.stack
+            },
+            "Failed to send FAQ panel"
+          );
+        }
+
+        // ======================================================
+        // ARCADE PANEL
+        // ======================================================
+
+        try {
+          await this.ensureArcadePanel();
+
+          logger.info(
+            "✅ Arcade panel ready"
+          );
+        } catch (error) {
+          logger.error(
+            {
+              error:
+                error?.message,
+
+              stack:
+                error?.stack
+            },
+            "Failed to maintain arcade panel"
+          );
+        }
       } catch (error) {
         logger.error(
           {
-            error: error?.message,
-            stack: error?.stack
+            error:
+              error?.message,
+
+            stack:
+              error?.stack
           },
-          "Failed to send verification panel"
+          "Discord ready handler failed"
         );
       }
-
-    } catch (error) {
-      logger.error(
-        {
-          error: error?.message,
-          stack: error?.stack
-        },
-        "Discord ready handler failed"
-      );
     }
-  });
+  );
 }
 
   // ==========================================================
@@ -190,6 +315,20 @@ setupReadyHandler() {
       "interactionCreate",
       async interaction => {
         try {
+          // --------------------------------------------------
+          // SLASH COMMANDS
+          // --------------------------------------------------
+
+          if (
+            interaction.isChatInputCommand()
+          ) {
+            await this.handleSlashCommand(
+              interaction
+            );
+
+            return;
+          }
+
           // --------------------------------------------------
           // BUTTONS
           // --------------------------------------------------
@@ -300,6 +439,209 @@ setupReadyHandler() {
   }
 
   // ==========================================================
+  // SLASH COMMAND ROUTER
+  // ==========================================================
+
+  async handleSlashCommand(
+    interaction
+  ) {
+    const { commandName } = interaction;
+
+    if (
+      commandName === "ping"
+    ) {
+      return interaction.reply({
+        content: `🏓 Pong! ${this.client.ws.ping}ms`,
+        ephemeral: true
+      });
+    }
+
+    if (
+      commandName === "status"
+    ) {
+      return this.replyToChannel(
+        interaction,
+        {
+          embeds: [
+            new EmbedBuilder()
+              .setColor("#00FF00")
+              .setTitle("✅ NexusAI Status")
+              .addFields(
+                {
+                  name: "Status",
+                  value: "Online",
+                  inline: true
+                },
+                {
+                  name: "Ping",
+                  value: `${this.client.ws.ping}ms`,
+                  inline: true
+                },
+                {
+                  name: "Uptime",
+                  value: this.formatUptime(this.client.uptime),
+                  inline: true
+                }
+              )
+              .setTimestamp()
+          ]
+        }
+      );
+    }
+
+    if (
+      commandName === "verify"
+    ) {
+      return this.handleVerifyCommand(
+        interaction
+      );
+    }
+
+    if (
+      commandName === "purge"
+    ) {
+      return this.handlePurgeCommand(
+        interaction
+      );
+    }
+
+    if (
+      commandName === "addprize"
+    ) {
+      return this.handleAddPrizeCommand(
+        interaction
+      );
+    }
+
+    return interaction.reply({
+      content: "❌ Unknown slash command.",
+      ephemeral: true
+    });
+  }
+
+  async handleAddPrizeCommand(interaction) {
+    const member = interaction.member;
+    const developerRoleId = config.discord.developerRoleId || DEV_ROLE_ID;
+
+    if (!hasRole(member, developerRoleId)) {
+      return interaction.reply({
+        content: "🚫 Sorry This command is dev only",
+        ephemeral: true
+      });
+    }
+
+    const name = interaction.options.getString("name")?.trim();
+    const cost = interaction.options.getInteger("cost");
+    const description = interaction.options.getString("description")?.trim();
+
+    if (!name || !cost || !description) {
+      return interaction.reply({
+        content: "❌ Please provide a prize name, a point cost, and a description.",
+        ephemeral: true
+      });
+    }
+
+    const prize = createArcadePrize({
+      name,
+      cost,
+      description
+    });
+
+    this.arcadePrizeCatalog = this.arcadePrizeCatalog.length
+      ? this.arcadePrizeCatalog
+      : [];
+
+    return interaction.reply({
+      embeds: [
+        new EmbedBuilder()
+          .setColor("#00D166")
+          .setTitle("✨ Prize Added")
+          .setDescription(`A new arcade reward was created for **${name}**.`)
+          .addFields(
+            { name: "💰 Cost", value: `${cost} points`, inline: true },
+            { name: "📌 Claim Type", value: "Support ticket", inline: true },
+            { name: "📝 Details", value: description, inline: false }
+          )
+          .setTimestamp()
+      ],
+      ephemeral: true
+    });
+  }
+
+  async handlePurgeCommand(
+    interaction
+  ) {
+    if (
+      !interaction.guildId
+    ) {
+      return interaction.reply({
+        content: "This command can only be used in a server text channel.",
+        ephemeral: true
+      });
+    }
+
+    if (
+      !interaction.memberPermissions?.has(
+        PermissionFlagsBits.ManageMessages
+      )
+    ) {
+      return interaction.reply({
+        content: "You need the Manage Messages permission to use /purge.",
+        ephemeral: true
+      });
+    }
+
+    const channel = interaction.channel;
+
+    if (
+      !channel ||
+      !channel.isTextBased?.()
+    ) {
+      return interaction.reply({
+        content: "This command can only be used in a text channel.",
+        ephemeral: true
+      });
+    }
+
+    const count =
+      Math.min(
+        interaction.options.getInteger("count") ?? 25,
+        100
+      );
+
+    try {
+      await interaction.deferReply({
+        ephemeral: true
+      });
+
+      const deleted = await channel.bulkDelete(count, true);
+
+      return interaction.editReply({
+        content: `🧹 Purged ${deleted.size} message(s) from this channel.`
+      });
+    } catch (error) {
+      logger.error(
+        {
+          error: error?.message,
+          stack: error?.stack,
+          userId: interaction.user?.id,
+          channelId: channel?.id
+        },
+        "Purge command failed"
+      );
+
+      return interaction.editReply({
+        content: "❌ Discord only allows bulk deletion of recent messages. Messages older than 14 days cannot be purged by this command."
+      }).catch(() => {
+        return interaction.reply({
+          content: "❌ Discord only allows bulk deletion of recent messages. Messages older than 14 days cannot be purged by this command.",
+          ephemeral: true
+        });
+      });
+    }
+  }
+
+  // ==========================================================
   // MESSAGE HANDLER
   // ==========================================================
 
@@ -358,48 +700,6 @@ setupReadyHandler() {
             return;
           }
 
-          // --------------------------------------------------
-          // PREFIX COMMANDS
-          // --------------------------------------------------
-
-          const prefix =
-            config.discord.prefix;
-
-          if (
-            !prefix ||
-            !message.content.startsWith(
-              prefix
-            )
-          ) {
-            return;
-          }
-
-          const content =
-            message.content
-              .slice(prefix.length)
-              .trim();
-
-          if (!content) {
-            return;
-          }
-
-          const args =
-            content.split(/\s+/);
-
-          const command =
-            args
-              .shift()
-              ?.toLowerCase();
-
-          if (!command) {
-            return;
-          }
-
-          await this.handleCommand(
-            command,
-            args,
-            message
-          );
         } catch (error) {
           logger.error(
             {
@@ -548,13 +848,249 @@ setupReadyHandler() {
   // ==========================================================
 
   async sendVerificationPanel() {
+  const channel =
+    this.client.channels.cache.get(
+      VERIFICATION_CHANNEL_ID
+    ) ??
+    await this.client.channels
+      .fetch(
+        VERIFICATION_CHANNEL_ID
+      )
+      .catch(
+        () => null
+      );
+
+  if (!channel) {
+    logger.warn(
+      {
+        channelId:
+          VERIFICATION_CHANNEL_ID
+      },
+      "Verification channel was not found"
+    );
+
+    return null;
+  }
+
+  if (!channel.isTextBased()) {
+    logger.warn(
+      {
+        channelId:
+          VERIFICATION_CHANNEL_ID
+      },
+      "Verification channel is not text-based"
+    );
+
+    return null;
+  }
+
+  // ========================================================
+  // FIND + REMOVE EXISTING NEXUSAI VERIFICATION PANELS
+  // ========================================================
+
+  try {
+    const messages =
+      await channel.messages.fetch({
+        limit: 100
+      });
+
+    for (
+      const message of messages.values()
+    ) {
+      if (
+        message.author?.id !==
+        this.client.user?.id
+      ) {
+        continue;
+      }
+
+      let serialized = "";
+
+      try {
+        serialized =
+          JSON.stringify(
+            typeof message.toJSON ===
+              "function"
+              ? message.toJSON()
+              : message
+          );
+      } catch {
+        serialized =
+          "";
+      }
+
+      const isVerificationPanel =
+        serialized.includes(
+          VERIFICATION_WEBSITE_URL
+        ) ||
+        serialized.includes(
+          "Verify on Website"
+        ) ||
+        serialized.includes(
+          "NexusAI Verification"
+        ) ||
+        serialized.includes(
+          "verification_start"
+        );
+
+      if (!isVerificationPanel) {
+        continue;
+      }
+
+      logger.info(
+        {
+          messageId:
+            message.id
+        },
+        "Removing existing NexusAI verification panel"
+      );
+
+      await message
+        .delete()
+        .catch(
+          () => {}
+        );
+    }
+  } catch (error) {
+    logger.warn(
+      {
+        error:
+          error?.message,
+
+        stack:
+          error?.stack,
+
+        channelId:
+          VERIFICATION_CHANNEL_ID
+      },
+      "Could not clean existing verification panels"
+    );
+  }
+
+  // ========================================================
+  // CREATE COMPONENTS V2 PANEL
+  // ========================================================
+
+  const container =
+    new ContainerBuilder()
+      .setAccentColor(
+        0x5865F2
+      )
+
+      .addTextDisplayComponents(
+        new TextDisplayBuilder()
+          .setContent(
+            [
+              "# 🛡️ NexusAI Verification",
+              "",
+              "Welcome to **NexusAI**!",
+              "",
+              "Before accessing the verified areas of the server, please complete our secure verification process."
+            ].join("\n")
+          )
+      )
+
+      .addSeparatorComponents()
+
+      .addTextDisplayComponents(
+        new TextDisplayBuilder()
+          .setContent(
+            [
+              "## 🔐 Verification Process",
+              "",
+              "① **Open the verification website**",
+              "② **Complete Cloudflare Turnstile**",
+              "③ **Complete the NexusAI security challenge**",
+              "④ **Connect your Discord account**",
+              "⑤ **Receive the Verified role automatically**"
+            ].join("\n")
+          )
+      )
+
+      .addSeparatorComponents()
+
+      .addSectionComponents(
+        new SectionBuilder()
+          .addTextDisplayComponents(
+            new TextDisplayBuilder()
+              .setContent(
+                [
+                  "**Ready to verify?**",
+                  "",
+                  "Click the button below to open the secure NexusAI verification website."
+                ].join("\n")
+              )
+          )
+
+          .setButtonAccessory(
+            new ButtonBuilder()
+              .setLabel(
+                "Verify on Website"
+              )
+
+              .setEmoji(
+                "🛡️"
+              )
+
+              .setStyle(
+                ButtonStyle.Link
+              )
+
+              .setURL(
+                VERIFICATION_WEBSITE_URL
+              )
+          )
+      )
+
+      .addSeparatorComponents()
+
+      .addTextDisplayComponents(
+        new TextDisplayBuilder()
+          .setContent(
+            [
+              "🔒 **Security**",
+              "",
+              "NexusAI will never ask for your Discord password, Discord token, or authentication credentials."
+            ].join("\n")
+          )
+      );
+
+  const message =
+    await channel.send({
+      components: [
+        container
+      ],
+
+      flags:
+        MessageFlags.IsComponentsV2
+    });
+
+  logger.info(
+    {
+      channelId:
+        VERIFICATION_CHANNEL_ID,
+
+      messageId:
+        message.id
+    },
+    "✅ Website verification panel sent"
+  );
+
+  return message;
+}
+
+    // ==========================================================
+  // TERMS OF SERVICE PANEL
+  // ==========================================================
+
+  async sendTosPanel() {
     const channel =
       this.client.channels.cache.get(
-        VERIFICATION_CHANNEL_ID
+        TOS_CHANNEL_ID
       ) ??
       await this.client.channels
         .fetch(
-          VERIFICATION_CHANNEL_ID
+          TOS_CHANNEL_ID
         )
         .catch(
           () => null
@@ -564,9 +1100,9 @@ setupReadyHandler() {
       logger.warn(
         {
           channelId:
-            VERIFICATION_CHANNEL_ID
+            TOS_CHANNEL_ID
         },
-        "Verification channel was not found"
+        "TOS channel was not found"
       );
 
       return null;
@@ -578,16 +1114,16 @@ setupReadyHandler() {
       logger.warn(
         {
           channelId:
-            VERIFICATION_CHANNEL_ID
+            TOS_CHANNEL_ID
         },
-        "Verification channel is not text-based"
+        "TOS channel is not text-based"
       );
 
       return null;
     }
 
     // ========================================================
-    // CLEAN OLD VERIFICATION PANELS
+    // REMOVE PREVIOUS NEXUSAI TOS PANELS
     // ========================================================
 
     try {
@@ -597,70 +1133,21 @@ setupReadyHandler() {
             100
         });
 
-      const oldPanels =
+      const previousTosMessages =
         messages.filter(
-          message => {
-            /*
-             * NEVER delete messages belonging to users.
-             */
-            if (
-              message.author?.id !==
-              this.client.user?.id
-            ) {
-              return false;
-            }
-
-            /*
-             * Old EmbedBuilder verification panel.
-             */
-            const oldEmbed =
-              message.embeds?.some(
-                embed =>
-                  embed.title ===
-                  "🛡️ NexusAI Verification"
-              );
-
-            /*
-             * Old Discord verification buttons.
-             */
-            const oldVerificationButton =
-              message.components?.some(
-                row =>
-                  row.components?.some(
-                    component =>
-                      [
-                        "verification_start",
-                        "verification_step1",
-                        "verification_step2",
-                        "verification_step3"
-                      ].includes(
-                        component.customId
-                      )
-                  )
-              );
-
-            /*
-             * Old verification text.
-             */
-            const oldText =
-              message.content?.includes(
-                "Start Verification"
-              ) ||
-              message.content?.includes(
-                "Verify on Website"
-              );
-
-            return (
-              oldEmbed ||
-              oldVerificationButton ||
-              oldText
-            );
-          }
+          message =>
+            message.author?.id ===
+              this.client.user?.id &&
+            message.embeds?.some(
+              embed =>
+                embed.title ===
+                TOS_TITLE
+            )
         );
 
       for (
         const message of
-          oldPanels.values()
+          previousTosMessages.values()
       ) {
         await message
           .delete()
@@ -677,127 +1164,56 @@ setupReadyHandler() {
             error?.message,
 
           channelId:
-            VERIFICATION_CHANNEL_ID
+            TOS_CHANNEL_ID
         },
-        "Could not clean previous verification panels"
+        "Could not clean previous TOS panels"
       );
     }
 
     // ========================================================
-    // COMPONENTS V2 PANEL
+    // CREATE TOS EMBED
     // ========================================================
 
-    const container =
-      new ContainerBuilder()
-        .setAccentColor(
-          0x5865F2
+    const embed =
+      new EmbedBuilder()
+        .setColor(
+          "#ED4245"
         )
-
-        .addTextDisplayComponents(
-          new TextDisplayBuilder()
-            .setContent(
-              [
-                "# 🛡️ NexusAI Verification",
-                "",
-                "Welcome to **NexusAI**!",
-                "",
-                "Before accessing the verified areas of the server, please complete our secure verification process."
-              ].join(
-                "\n"
-              )
-            )
+        .setTitle(
+          TOS_TITLE
         )
-
-        .addSeparatorComponents()
-
-        .addTextDisplayComponents(
-          new TextDisplayBuilder()
-            .setContent(
-              [
-                "## 🔐 Verification Process",
-                "",
-                "① **Open the verification website**",
-                "② **Complete Cloudflare Turnstile**",
-                "③ **Complete the NexusAI security challenge**",
-                "④ **Connect your Discord account**",
-                "⑤ **Receive the Verified role automatically**"
-              ].join(
-                "\n"
-              )
-            )
+        .setDescription(
+          TOS_TEXT
         )
+        .setFooter({
+          text:
+            `NexusAI • Terms of Service v${TOS_VERSION}`
+        })
+        .setTimestamp();
 
-        .addSeparatorComponents()
-
-        .addSectionComponents(
-          new SectionBuilder()
-            .addTextDisplayComponents(
-              new TextDisplayBuilder()
-                .setContent(
-                  [
-                    "**Ready to verify?**",
-                    "",
-                    "Click the button below to open the secure NexusAI verification website."
-                  ].join(
-                    "\n"
-                  )
-                )
-            )
-
-            .setButtonAccessory(
-              new ButtonBuilder()
-                .setLabel(
-                  "Verify on Website"
-                )
-
-                .setEmoji(
-                  "🛡️"
-                )
-
-                .setStyle(
-                  ButtonStyle.Link
-                )
-
-                .setURL(
-                  VERIFICATION_WEBSITE_URL
-                )
-            )
-        )
-
-        .addSeparatorComponents()
-
-        .addTextDisplayComponents(
-          new TextDisplayBuilder()
-            .setContent(
-              [
-                "🔒 **Security**",
-                "",
-                "NexusAI will never ask for your Discord password, Discord token, or authentication credentials."
-              ].join(
-                "\n"
-              )
-            )
-        );
+    // ========================================================
+    // SEND TOS
+    // ========================================================
 
     const message =
       await channel.send({
-        components: [
-          container
-        ],
-
-        flags:
-          MessageFlags.IsComponentsV2
+        embeds: [
+          embed
+        ]
       });
 
     logger.info(
       {
         channelId:
-          VERIFICATION_CHANNEL_ID,
+          TOS_CHANNEL_ID,
 
         messageId:
-          message.id
+          message.id,
+
+        version:
+          TOS_VERSION
       },
-      "✅ Website verification panel sent"
+      "✅ NexusAI Terms of Service panel sent"
     );
 
     return message;
@@ -852,8 +1268,8 @@ setupReadyHandler() {
     const select =
       new StringSelectMenuBuilder()
         .setCustomId(
-          `login_type_${platform}`
-        )
+  `login_type_${platform.key}`
+)
         .setPlaceholder(
           "🔐 Select a login method..."
         )
@@ -1285,297 +1701,8 @@ setupReadyHandler() {
   }
 
   // ==========================================================
-  // COMMAND HANDLER
+  // DISCORD MESSAGE HANDLING
   // ==========================================================
-
-  async handleCommand(
-    command,
-    args,
-    message
-  ) {
-    logger.info(
-      {
-        command,
-        author:
-          message.author?.username
-      },
-      "Command received"
-    );
-
-    /*
-     * Give the application's command handler
-     * first opportunity to process the command.
-     */
-
-    if (
-      this.commandHandler &&
-      this.commandHandler.commands?.has(
-        command
-      )
-    ) {
-      return this.commandHandler.commands.get(
-        command
-      )(message, args);
-    }
-
-    switch (
-      command
-    ) {
-      case "help":
-        return this.handleHelp(
-          message
-        );
-
-      case "solve":
-        return this.handleSolve(
-          message,
-          args
-        );
-
-      case "status":
-        return this.handleStatus(
-          message
-        );
-
-      case "ping":
-  return this.replyToChannel(
-    message,
-    `🏓 Pong! ${this.client.ws.ping}ms`
-  );
-
-case "verify":
-  return this.handleVerifyCommand(
-    message
-  );
-
-default:
-  return this.replyToChannel(
-    message,
-    "❓ Unknown command. Use `!help`"
-  );
-}
-  }
-
-  // ==========================================================
-  // HELP
-  // ==========================================================
-
-  async handleHelp(
-    message
-  ) {
-    const embed =
-      new EmbedBuilder()
-        .setColor(
-          "#0099FF"
-        )
-        .setTitle(
-          "📚 NexusAI Commands"
-        )
-        .addFields(
-          {
-            name:
-              "Homework",
-            value:
-              [
-                "`!homework` — View homework",
-                "`!homework create [subject] [name]` — Create task",
-                "`!tasks` — Homework alias"
-              ].join("\n")
-          },
-          {
-            name:
-              "Premium",
-            value:
-              [
-                "`!premium` — View premium tiers",
-                "`!trial claim` — Start free trial"
-              ].join("\n")
-          },
-          {
-            name:
-              "Queue",
-            value:
-              [
-                "`!queue` — View queue",
-                "`!join [platform]` — Join queue"
-              ].join("\n")
-          },
-          {
-            name:
-              "Past Papers",
-            value:
-              [
-                "`!pastpapers` — Latest papers",
-                "`!pastpapers <subject>` — Search papers"
-              ].join("\n")
-          },
-          {
-            name:
-              "Scheduler",
-            value:
-              [
-                "`!schedule` — View schedules",
-                "`!schedule create [platform] [time]` — Create schedule"
-              ].join("\n")
-          },
-          {
-            name:
-              "Verification",
-            value:
-              "`!verify` — Start verification"
-          },
-          {
-            name:
-              "Information",
-            value:
-              [
-                "`!stats` — Bot statistics",
-                "`!status` — Bot status",
-                "`!ping` — Check latency"
-              ].join("\n")
-          }
-        )
-        .setFooter({
-          text:
-            "🥭 NexusAI"
-        })
-        .setTimestamp();
-
-    return this.replyToChannel(
-      message,
-      {
-        embeds: [
-          embed
-        ]
-      }
-    );
-  }
-
-  // ==========================================================
-  // SOLVE
-  // ==========================================================
-
-  async handleSolve(
-    message,
-    args
-  ) {
-    if (
-      args.length <
-      2
-    ) {
-      return this.replyToChannel(
-        message,
-        "❌ Usage: `!solve <platform> <question>`"
-      );
-    }
-
-    const platform =
-      args[0].toLowerCase();
-
-    const question =
-      args
-        .slice(1)
-        .join(" ");
-
-    return this.replyToChannel(
-      message,
-      [
-        `🔄 Processing your request for **${platform}**...`,
-        "",
-        `**Question:** ${question}`
-      ].join("\n")
-    );
-  }
-
-  // ==========================================================
-  // STATUS
-  // ==========================================================
-
-  async handleStatus(
-    message
-  ) {
-    const guildSession =
-      message.guild
-        ? this.activeSessions.get(
-            message.guild.id
-          )
-        : null;
-
-    const embed =
-      new EmbedBuilder()
-        .setColor(
-          "#00FF00"
-        )
-        .setTitle(
-          "✅ NexusAI Status"
-        )
-        .addFields(
-          {
-            name:
-              "Status",
-            value:
-              "Online",
-            inline:
-              true
-          },
-          {
-            name:
-              "Ping",
-            value:
-              `${this.client.ws.ping}ms`,
-            inline:
-              true
-          },
-          {
-            name:
-              "Uptime",
-            value:
-              this.formatUptime(
-                this.client.uptime
-              ),
-            inline:
-              true
-          },
-          {
-            name:
-              "Version",
-            value:
-              "2.0.0",
-            inline:
-              true
-          },
-          {
-            name:
-              "Auto Channels",
-            value:
-              guildSession
-                ? "Enabled"
-                : "Disabled",
-            inline:
-              true
-          },
-          {
-            name:
-              "Verification",
-            value:
-              VERIFIED_ROLE_ID
-                ? "Configured"
-                : "Role not configured",
-            inline:
-              true
-          }
-        )
-        .setTimestamp();
-
-    return this.replyToChannel(
-      message,
-      {
-        embeds: [
-          embed
-        ]
-      }
-    );
-  }
 
   // ==========================================================
   // GUILD SESSION
@@ -1877,6 +2004,133 @@ if (
 
     const action =
       parts.join("_");
+
+    // ========================================================
+    // ARCADE
+    // ========================================================
+
+    if (
+      group === "arcade"
+    ) {
+      if (
+        action === "dev_prizes"
+      ) {
+        if (
+          !hasRole(
+            interaction.member,
+            config.discord.developerRoleId
+          )
+        ) {
+          return this.respondToInteraction(
+            interaction,
+            {
+              content:
+                "🚫 Only developers can access the prize hub.",
+              flags:
+                MessageFlags.Ephemeral
+            }
+          );
+        }
+
+        return this.respondToInteraction(
+          interaction,
+          buildPrizeHubPanel()
+        );
+      }
+
+      if (
+        action === "create_prize"
+      ) {
+        if (
+          !hasRole(
+            interaction.member,
+            config.discord.developerRoleId
+          )
+        ) {
+          return this.respondToInteraction(
+            interaction,
+            {
+              content:
+                "🚫 Only developers can create prizes.",
+              flags:
+                MessageFlags.Ephemeral
+            }
+          );
+        }
+
+        return this.respondToInteraction(
+          interaction,
+          {
+            content:
+              "✅ Prize creation is enabled for developers only. Add the prize in code or via your admin flow.",
+            flags:
+              MessageFlags.Ephemeral
+          }
+        );
+      }
+
+      if (
+        action.startsWith("claim_")
+      ) {
+        const verifiedRoleId = config.verification.roleId || VERIFIED_ROLE_ID;
+
+        if (
+          !hasRole(
+            interaction.member,
+            verifiedRoleId
+          )
+        ) {
+          return this.respondToInteraction(
+            interaction,
+            {
+              content:
+                "🚫 Only verified members can claim arcade prizes.",
+              flags:
+                MessageFlags.Ephemeral
+            }
+          );
+        }
+
+        const prizeId = action.replace("claim_", "");
+        const prize = arcadePrizes.find((item) => item.id === prizeId);
+
+        if (!prize) {
+          return this.respondToInteraction(
+            interaction,
+            {
+              content:
+                "❌ That prize no longer exists.",
+              flags:
+                MessageFlags.Ephemeral
+            }
+          );
+        }
+
+        const points = getArcadePoints(interaction.user.id);
+
+        if (points < prize.cost) {
+          return this.respondToInteraction(
+            interaction,
+            {
+              content:
+                `💸 You need **${prize.cost - points} more points** to claim **${prize.name}**.`,
+              flags:
+                MessageFlags.Ephemeral
+            }
+          );
+        }
+
+        return this.respondToInteraction(
+          interaction,
+          {
+            content:
+              `✅ **${prize.name}** is ready for claim. Please open a support ticket and tell the team: **${prize.name}**. The reward will be processed from your arcade points balance.`,
+            flags:
+              MessageFlags.Ephemeral
+          }
+        );
+      }
+    }
 
     // ========================================================
     // JOIN QUEUE
@@ -2398,7 +2652,7 @@ if (
             name:
               "Guides",
             value:
-              "Check channel pins or run `!help`."
+              "Check channel pins for guidance."
           },
           {
             name:
@@ -3272,365 +3526,6 @@ if (
   }
 
   // ==========================================================
-  // COMMANDS
-  // ==========================================================
-
-  async handleCommand(
-    command,
-    args,
-    message
-  ) {
-    logger.info(
-      {
-        command,
-        author:
-          message.author.username
-      },
-      "Command received"
-    );
-
-    if (
-      this.commandHandler &&
-      this.commandHandler.commands.has(
-        command
-      )
-    ) {
-      return this.commandHandler
-        .commands
-        .get(command)(
-          message,
-          args
-        );
-    }
-
-    switch (
-      command
-    ) {
-      case "help":
-        return this.handleHelp(
-          message
-        );
-
-      case "solve":
-        return this.handleSolve(
-          message,
-          args
-        );
-
-      case "status":
-        return this.handleStatus(
-          message
-        );
-
-      case "ping":
-        return this.replyToChannel(
-          message,
-          `🏓 Pong! ${this.client.ws.ping}ms`
-        );
-
-      case "verify":
-  return this.handleVerifyCommand(
-    message
-  );
-
-      default:
-        return this.replyToChannel(
-          message,
-          "❓ Unknown command. Use `!help`"
-        );
-    }
-  }
-
-  // ==========================================================
-  // VERIFY COMMAND
-  // ==========================================================
-
-  async handleVerifyCommand(
-  message
-) {
-  const accountAge =
-    getDiscordAccountAge(
-      message.author.id
-    );
-
-  /*
-   * Defensive account-age check.
-   *
-   * The Cloudflare Worker performs the authoritative
-   * check before assigning the Verified role.
-   *
-   * The Discord bot itself NEVER assigns the role.
-   */
-
-  if (
-    accountAge &&
-    accountAge.ageDays <
-      MIN_DISCORD_ACCOUNT_AGE_DAYS
-  ) {
-    const remainingDays =
-      Math.max(
-        1,
-        MIN_DISCORD_ACCOUNT_AGE_DAYS -
-          accountAge.ageDays
-      );
-
-    return this.replyToChannel(
-      message,
-      {
-        embeds: [
-          new EmbedBuilder()
-            .setColor(
-              "#ED4245"
-            )
-            .setTitle(
-              "🚫 Account Too New"
-            )
-            .setDescription(
-              [
-                "Sorry, this Discord account isn't old enough to access this server.",
-                "",
-                `**Account age:** ${accountAge.ageDays} day${
-                  accountAge.ageDays === 1
-                    ? ""
-                    : "s"
-                }`,
-                "**Minimum required:** 30 days (1 month)",
-                "",
-                `Please try again in approximately ${remainingDays} day${
-                  remainingDays === 1
-                    ? ""
-                    : "s"
-                }.`
-              ].join(
-                "\n"
-              )
-            )
-            .setFooter({
-              text:
-                "NexusAI • Server Security"
-            })
-            .setTimestamp()
-        ]
-      }
-    );
-  }
-
-  /*
-   * Eligible users are directed to the website.
-   */
-  return this.replyToChannel(
-    message,
-    {
-      embeds: [
-        new EmbedBuilder()
-          .setColor(
-            "#5865F2"
-          )
-          .setTitle(
-            "🛡️ NexusAI Website Verification"
-          )
-          .setDescription(
-            [
-              "Verification is completed securely through the NexusAI verification website.",
-              "",
-              `🔗 **Verify here:** ${VERIFICATION_WEBSITE_URL}`,
-              "",
-              "The website performs Cloudflare Turnstile, the NexusAI security challenge, Discord authentication, and the final account-age verification."
-            ].join(
-              "\n"
-            )
-          )
-          .setFooter({
-            text:
-              "🥭 NexusAI • Secure Website Verification"
-          })
-          .setTimestamp()
-      ]
-    }
-  );
-}
-
-  // ==========================================================
-  // HELP
-  // ==========================================================
-
-  async handleHelp(
-    message
-  ) {
-    const embed =
-      new EmbedBuilder()
-        .setColor(
-          "#0099FF"
-        )
-        .setTitle(
-          "📚 NexusAI Commands"
-        )
-        .addFields(
-          {
-            name:
-              "Homework",
-            value:
-              "`!homework` - View homework progress\n" +
-              "`!tasks` - View tasks"
-          },
-          {
-            name:
-              "Premium",
-            value:
-              "`!premium` - View premium information\n" +
-              "`!trial claim` - Start a trial"
-          },
-          {
-            name:
-              "Queue",
-            value:
-              "`!queue` - View queue status\n" +
-              "`!join [platform]` - Join a queue"
-          },
-          {
-            name:
-              "Verification",
-            value:
-              "`!verify` - Check verification status"
-          },
-          {
-            name:
-              "Scheduler",
-            value:
-              "`!schedule` - Manage schedules"
-          },
-          {
-            name:
-              "General",
-            value:
-              "`!status` - Bot status\n" +
-              "`!ping` - Check latency"
-          }
-        )
-        .setTimestamp();
-
-    return this.replyToChannel(
-      message,
-      {
-        embeds: [
-          embed
-        ]
-      }
-    );
-  }
-
-  // ==========================================================
-  // SOLVE COMMAND
-  // ==========================================================
-
-  async handleSolve(
-    message,
-    args
-  ) {
-    if (
-      args.length < 2
-    ) {
-      return this.replyToChannel(
-        message,
-        "❌ Usage: `!solve <platform> <question>`"
-      );
-    }
-
-    const platform =
-      args[0].toLowerCase();
-
-    const question =
-      args
-        .slice(1)
-        .join(" ");
-
-    return this.replyToChannel(
-      message,
-      `🔄 Processing your request for **${platform}**...\nQuestion: ${question}`
-    );
-  }
-
-  // ==========================================================
-  // STATUS
-  // ==========================================================
-
-  async handleStatus(
-    message
-  ) {
-    const guildSession =
-      message.guild
-        ? this.activeSessions.get(
-            message.guild.id
-          )
-        : null;
-
-    const embed =
-      new EmbedBuilder()
-        .setColor(
-          "#00FF00"
-        )
-        .setTitle(
-          "✅ NexusAI Status"
-        )
-        .addFields(
-          {
-            name:
-              "Status",
-            value:
-              "Online",
-            inline:
-              true
-          },
-          {
-            name:
-              "Ping",
-            value:
-              `${this.client.ws.ping}ms`,
-            inline:
-              true
-          },
-          {
-            name:
-              "Uptime",
-            value:
-              this.formatUptime(
-                this.client.uptime
-              ),
-            inline:
-              true
-          },
-          {
-            name:
-              "Version",
-            value:
-              "2.0.0",
-            inline:
-              true
-          },
-          {
-            name:
-              "Auto Channels",
-            value:
-              guildSession
-                ? "Enabled"
-                : "Disabled",
-            inline:
-              true
-          }
-        )
-        .setTimestamp();
-
-    return this.replyToChannel(
-      message,
-      {
-        embeds: [
-          embed
-        ]
-      }
-    );
-  }
-
-  // ==========================================================
   // SESSION HELPERS
   // ==========================================================
 
@@ -4095,6 +3990,42 @@ if (
   // ==========================================================
   // LOGIN
   // ==========================================================
+
+  async ensureArcadePanel() {
+    const channelId = config.discord.arcadeChannelId;
+
+    if (!channelId) {
+      return;
+    }
+
+    const channel = this.client.channels.cache.get(channelId) ?? await this.client.channels.fetch(channelId).catch(() => null);
+
+    if (!channel || !channel.isTextBased?.()) {
+      logger.warn(
+        { channelId },
+        "Arcade channel not found or not text-based"
+      );
+      return;
+    }
+
+    const existingMessages = await channel.messages.fetch({ limit: 50 }).catch(() => new Map());
+    const existingMessage = Array.from(existingMessages.values()).find((message) => {
+      const footerText = message.embeds?.[0]?.footer?.text ?? "";
+      return footerText.includes(ARCADE_PANEL_MARKER) || message.content?.includes(ARCADE_PANEL_MARKER);
+    });
+
+    if (existingMessage) {
+      logger.info(
+        { channelId, messageId: existingMessage.id },
+        "Arcade panel already exists; preserving it"
+      );
+      return;
+    }
+
+    const payload = buildArcadePanel();
+    await channel.send(payload);
+    logger.info({ channelId }, "Arcade panel sent");
+  }
 
   async login() {
     try {

@@ -1,17 +1,83 @@
+# ==========================================================
+# DEPENDENCIES
+# ==========================================================
+
 node_modules/
+
+
+# ==========================================================
+# ENVIRONMENT / SECRETS
+# ==========================================================
+
 .env
-videos/*
-!videos/.gitkeep
-logs.txt
-sessionLogs/**
-!sessionLogs/**/.gitkeep
-config.json
+.env.*
+!.env.example
+
 apikeys.txt
 apikeys_exhausted.txt
-crash.log
-tools/__pycache__
+config.json
+
+
+# ==========================================================
+# LOGS
+# ==========================================================
+
 *.log
-.git/
+logs.txt
+crash.log
+
+logs/
+sessionLogs/
+sessionLogs/**
+!sessionLogs/.gitkeep
+!sessionLogs/**/.gitkeep
+
+
+# ==========================================================
+# GENERATED / USER DATA
+# ==========================================================
+
+videos/*
+!videos/.gitkeep
+
+*.tmp
+*.temp
+*.bak
+
+
+# ==========================================================
+# PLAYWRIGHT
+# ==========================================================
+
 ms-playwright/
 playwright-report/
 test-results/
+
+
+# ==========================================================
+# PYTHON
+# ==========================================================
+
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+
+# ==========================================================
+# LOCAL / IDE
+# ==========================================================
+
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+
+# ==========================================================
+# GIT
+# ==========================================================
+
+.git/
+
+# Sparx authenticated browser session
+packages/adapters/sparx/storageState.json

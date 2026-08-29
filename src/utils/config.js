@@ -19,8 +19,11 @@ export const config = {
     token:
       process.env.DISCORD_TOKEN || '',
 
-    prefix:
-      process.env.DISCORD_PREFIX || '!',
+    developerRoleId:
+      process.env.DEV_ROLE_ID || '1510305056468238558',
+
+    arcadeChannelId:
+      process.env.ARCADE_CHANNEL_ID || '1541427001435361321',
 
     channels: {
       learningPlatform:

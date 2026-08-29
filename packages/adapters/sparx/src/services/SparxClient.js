@@ -2,8 +2,12 @@
 import { QuestionParser } from "./QuestionParser.js";
 
 export class SparxClient {
-  constructor(browserManager, options = {}) {
-    this.browserManager = browserManager;
+  constructor(
+    browserManager,
+    options = {}
+  ) {
+    this.browserManager =
+      browserManager;
 
     this.questionParser =
       options.questionParser ??
@@ -22,28 +26,45 @@ export class SparxClient {
   // QUESTION INSPECTION
   // ============================================================
 
-  async inspectQuestion(url) {
-    const page = this.getPage();
+  async inspectQuestion(
+    url
+  ) {
+    const page =
+      this.getPage();
 
     if (!page) {
-      throw new Error("Sparx page is not available.");
+      throw new Error(
+        "Sparx page is not available."
+      );
     }
 
     if (!url) {
-      throw new Error("Question URL was not provided.");
+      throw new Error(
+        "Question URL was not provided."
+      );
     }
 
-    await page.goto(url, {
-      waitUntil: "domcontentloaded",
-      timeout: 30000
-    });
+    await page.goto(
+      url,
+      {
+        waitUntil:
+          "domcontentloaded",
 
-    await page.waitForTimeout(1200);
+        timeout:
+          30000
+      }
+    );
 
-    return await this.questionParser.parse(page);
+    await page.waitForTimeout(
+      1200
+    );
+
+    return await this.questionParser.parse(
+      page
+    );
   }
 
-    // ============================================================
+  // ============================================================
   // AUTHENTICATION
   // ============================================================
 
@@ -51,7 +72,9 @@ export class SparxClient {
     const existingSession =
       await this.isLoggedIn();
 
-    if (existingSession) {
+    if (
+      existingSession
+    ) {
       console.log(
         "[Sparx] Existing session is authenticated."
       );
@@ -64,10 +87,11 @@ export class SparxClient {
     );
 
     console.log(
-      "[Sparx] Opening Sparx login page..."
+      "[Sparx] Opening Sparx login flow..."
     );
 
-    const page = this.getPage();
+    const page =
+      this.getPage();
 
     if (!page) {
       console.log(
@@ -82,7 +106,9 @@ export class SparxClient {
 
       await page
         .bringToFront()
-        .catch(() => {});
+        .catch(
+          () => {}
+        );
 
       console.log(
         "[Sparx] Please complete Sparx authentication in the browser."
@@ -101,20 +127,29 @@ export class SparxClient {
                 "maths.sparx-learning.com/student/"
               ),
           {
-            timeout: 300000
+            timeout:
+              300000
           }
         );
       } catch {
-        // The URL may not change exactly as expected.
-        // We perform an explicit authentication check below.
+        /*
+         * The authentication flow may use an intermediate
+         * redirect, so perform an explicit login check too.
+         */
       }
 
-      await page.waitForTimeout(1500);
+      await page.waitForTimeout(
+        1500
+      );
 
       const authenticated =
-        await this.isLoggedIn(page);
+        await this.isLoggedIn(
+          page
+        );
 
-      if (!authenticated) {
+      if (
+        !authenticated
+      ) {
         console.log(
           "[Sparx] Authentication was not detected."
         );
@@ -125,10 +160,6 @@ export class SparxClient {
       console.log(
         "[Sparx] Manual authentication successful ✅"
       );
-
-      // ========================================================
-      // SAVE THE NEW AUTHENTICATED BROWSER STATE
-      // ========================================================
 
       const storageStatePath =
         "packages/adapters/sparx/storageState.json";
@@ -146,10 +177,13 @@ export class SparxClient {
       );
 
       return true;
-    } catch (error) {
+    } catch (
+      error
+    ) {
       console.error(
         "[Sparx] Authentication flow failed:",
-        error?.message ?? error
+        error?.message ??
+          error
       );
 
       return false;
@@ -161,7 +195,8 @@ export class SparxClient {
   // ============================================================
 
   async acceptCookies() {
-    const page = this.getPage();
+    const page =
+      this.getPage();
 
     if (!page) {
       return false;
@@ -172,19 +207,27 @@ export class SparxClient {
     );
 
     const buttons =
-      page.getByRole("button");
+      page.getByRole(
+        "button"
+      );
 
     const count =
       await buttons.count();
 
-    for (let i = 0; i < count; i++) {
+    for (
+      let i = 0;
+      i < count;
+      i++
+    ) {
       const button =
         buttons.nth(i);
 
       const text = (
         await button
           .innerText()
-          .catch(() => "")
+          .catch(
+            () => ""
+          )
       ).trim();
 
       if (
@@ -196,9 +239,13 @@ export class SparxClient {
       }
 
       if (
-        !(await button
-          .isVisible()
-          .catch(() => false))
+        !(
+          await button
+            .isVisible()
+            .catch(
+              () => false
+            )
+        )
       ) {
         continue;
       }
@@ -209,26 +256,36 @@ export class SparxClient {
 
       await button
         .scrollIntoViewIfNeeded()
-        .catch(() => {});
+        .catch(
+          () => {}
+        );
 
-      await page.waitForTimeout(500);
+      await page.waitForTimeout(
+        500
+      );
 
       try {
         await button.click({
-          timeout: 10000
+          timeout:
+            10000
         });
 
-        await page.waitForTimeout(1000);
+        await page.waitForTimeout(
+          1000
+        );
 
         console.log(
           "[Sparx] Cookies accepted."
         );
 
         return true;
-      } catch (error) {
+      } catch (
+        error
+      ) {
         console.log(
           "[Sparx] Cookie button click failed:",
-          error?.message ?? error
+          error?.message ??
+            error
         );
       }
     }
@@ -262,10 +319,40 @@ export class SparxClient {
     );
   }
 
+  // ============================================================
+  // SPARX LOGIN FLOW
+  // ============================================================
+
   async gotoLogin() {
+    /*
+     * IMPORTANT:
+     *
+     * Do NOT navigate directly to:
+     *
+     * https://maths.sparx-learning.com/student/homework
+     *
+     * That URL can redirect straight into the OAuth
+     * flow when a school/domain is already known.
+     *
+     * We need the explicit school-selection page first
+     * because the NexusAI login flow asks the user for
+     * their school.
+     *
+     * Current Sparx school selector:
+     *
+     * https://selectschool.sparx-learning.com/
+     */
+
+    const schoolSelectorUrl =
+      "https://selectschool.sparx-learning.com/";
+
+    console.log(
+      "[Sparx] Opening school selection page..."
+    );
+
     const result =
       await this.goto(
-        "https://maths.sparx-learning.com/student/homework"
+        schoolSelectorUrl
       );
 
     const page =
@@ -281,7 +368,9 @@ export class SparxClient {
       .waitForLoadState(
         "domcontentloaded"
       )
-      .catch(() => {});
+      .catch(
+        () => {}
+      );
 
     await page.waitForTimeout(
       1500
@@ -290,11 +379,11 @@ export class SparxClient {
     await this.acceptCookies();
 
     console.log(
-      `[Sparx] Login page URL: ${page.url()}`
+      `[Sparx] School selection URL: ${page.url()}`
     );
 
     console.log(
-      `[Sparx] Login page title: ${await page.title()}`
+      `[Sparx] School selection title: ${await page.title()}`
     );
 
     return result;
@@ -332,12 +421,14 @@ export class SparxClient {
   ) {
     url =
       String(
-        url ?? ""
+        url ??
+          ""
       ).toLowerCase();
 
     title =
       String(
-        title ?? ""
+        title ??
+          ""
       ).toLowerCase();
 
     if (
@@ -401,9 +492,13 @@ export class SparxClient {
       await this.getTitle();
 
     return {
-      success: true,
+      success:
+        true,
+
       url,
+
       title,
+
       pageType:
         this.detectPageType(
           url,
@@ -428,7 +523,9 @@ export class SparxClient {
       );
     }
 
-    if (!schoolName) {
+    if (
+      !schoolName
+    ) {
       throw new Error(
         "School name was not provided."
       );
@@ -450,22 +547,113 @@ export class SparxClient {
       .waitForLoadState(
         "domcontentloaded"
       )
-      .catch(() => {});
+      .catch(
+        () => {}
+      );
 
-    const input =
+    /*
+     * --------------------------------------------------------
+     * CURRENT SPARX SCHOOL SELECTOR
+     * --------------------------------------------------------
+     */
+
+    const possibleInputs = [
       page
         .getByPlaceholder(
           "Start typing your school's name...",
           {
-            exact: true
+            exact:
+              true
           }
         )
-        .first();
+        .first(),
 
-    await input.waitFor({
-      state: "visible",
-      timeout: 15000
-    });
+      page
+        .locator(
+          'input[placeholder*="school" i]'
+        )
+        .first(),
+
+      page
+        .locator(
+          'input[aria-label*="school" i]'
+        )
+        .first(),
+
+      page
+        .locator(
+          'input[name*="school" i]'
+        )
+        .first(),
+
+      page
+        .locator(
+          'input[type="text"]'
+        )
+        .first()
+    ];
+
+    let input =
+      null;
+
+    for (
+      const candidate of
+        possibleInputs
+    ) {
+      try {
+        if (
+          await candidate.isVisible()
+        ) {
+          input =
+            candidate;
+
+          break;
+        }
+      } catch {
+        /*
+         * Try the next selector.
+         */
+      }
+    }
+
+    if (!input) {
+      const bodyText =
+        await page
+          .locator(
+            "body"
+          )
+          .innerText()
+          .catch(
+            () => ""
+          );
+
+      console.log(
+        "[Sparx] ❌ School search input was not found."
+      );
+
+      console.log(
+        `[Sparx] Current URL: ${page.url()}`
+      );
+
+      console.log(
+        `[Sparx] Current title: ${await page.title()}`
+      );
+
+      console.log(
+        "[Sparx] Page text preview:"
+      );
+
+      console.log(
+        bodyText.slice(
+          0,
+          3000
+        )
+      );
+
+      throw new Error(
+        "Could not find the Sparx school search input."
+      );
+    }
 
     console.log(
       "[Sparx] School search input found."
@@ -479,6 +667,9 @@ export class SparxClient {
       `[Sparx] Entered school name: ${schoolName}`
     );
 
+    /*
+     * Give Sparx time to populate the school results.
+     */
     await page.waitForTimeout(
       2000
     );
@@ -488,7 +679,9 @@ export class SparxClient {
     );
 
     return {
-      success: true,
+      success:
+        true,
+
       schoolName
     };
   }
@@ -505,87 +698,208 @@ export class SparxClient {
       );
     }
 
+    if (
+      !schoolName
+    ) {
+      throw new Error(
+        "School name was not provided."
+      );
+    }
+
     console.log(
       `[Sparx] Selecting school: ${schoolName}`
     );
 
-    const school =
+    /*
+     * Try an exact text match first.
+     */
+    const exactSchool =
       page
         .getByText(
           schoolName,
           {
-            exact: true
+            exact:
+              true
           }
         )
         .first();
 
     try {
-      await school.waitFor({
-        state: "visible",
-        timeout: 10000
+      await exactSchool.waitFor({
+        state:
+          "visible",
+
+        timeout:
+          10000
       });
 
       console.log(
         "[Sparx] Exact school result found."
       );
 
-      await school.click();
+      await exactSchool.click();
 
       console.log(
         "[Sparx] School clicked."
       );
     } catch {
-      console.log(
-        "[Sparx] Could not find exact school result."
-      );
-
-      const text =
-        await page
-          .locator("body")
-          .innerText()
-          .catch(() => "");
+      /*
+       * Some Sparx versions wrap the school name in
+       * a selectable element. Use a looser text match.
+       */
 
       console.log(
-        "[Sparx] Current page text:"
+        "[Sparx] Exact school result not found. Trying a broader match..."
       );
 
-      console.log(
-        text.slice(0, 5000)
-      );
+      const schoolResult =
+        page
+          .getByText(
+            schoolName,
+            {
+              exact:
+                false
+            }
+          )
+          .filter({
+            visible:
+              true
+          })
+          .first();
 
-      return {
-        success: false,
-        error:
-          `School "${schoolName}" was not found`
-      };
+      try {
+        await schoolResult.waitFor({
+          state:
+            "visible",
+
+          timeout:
+            10000
+        });
+
+        console.log(
+          "[Sparx] Broader school result found."
+        );
+
+        await schoolResult.click();
+
+        console.log(
+          "[Sparx] School result clicked."
+        );
+      } catch {
+        const text =
+          await page
+            .locator(
+              "body"
+            )
+            .innerText()
+            .catch(
+              () => ""
+            );
+
+        console.log(
+          "[Sparx] ❌ Could not find the requested school."
+        );
+
+        console.log(
+          "[Sparx] Current page text:"
+        );
+
+        console.log(
+          text.slice(
+            0,
+            5000
+          )
+        );
+
+        return {
+          success:
+            false,
+
+          error:
+            `School "${schoolName}" was not found`
+        };
+      }
     }
+
+    /*
+     * --------------------------------------------------------
+     * CONTINUE
+     * --------------------------------------------------------
+     */
 
     const continueButton =
       page
         .getByRole(
           "button",
           {
-            name: /^continue$/i
+            name:
+              /^continue$/i
           }
         )
         .first();
 
-    await continueButton.waitFor({
-      state: "visible",
-      timeout: 10000
-    });
+    try {
+      await continueButton.waitFor({
+        state:
+          "visible",
 
-    console.log(
-      "[Sparx] Continue button found."
-    );
+        timeout:
+          10000
+      });
+    } catch {
+      /*
+       * Fallback for a possible input/button implementation.
+       */
 
-    await this.acceptCookies();
+      const fallbackContinue =
+        page
+          .locator(
+            'button, input[type="submit"]'
+          )
+          .filter({
+            hasText:
+              /continue/i
+          })
+          .first();
 
-    await continueButton.click();
+      if (
+        await fallbackContinue
+          .isVisible()
+          .catch(
+            () => false
+          )
+      ) {
+        await fallbackContinue.click();
 
-    console.log(
-      "[Sparx] Continue clicked."
-    );
+        console.log(
+          "[Sparx] Fallback Continue clicked."
+        );
+      } else {
+        throw new Error(
+          "Could not find the Sparx Continue button after selecting the school."
+        );
+      }
+    }
+
+    if (
+      await continueButton
+        .isVisible()
+        .catch(
+          () => false
+        )
+    ) {
+      console.log(
+        "[Sparx] Continue button found."
+      );
+
+      await this.acceptCookies();
+
+      await continueButton.click();
+
+      console.log(
+        "[Sparx] Continue clicked."
+      );
+    }
 
     await page.waitForTimeout(
       2000
@@ -600,9 +914,12 @@ export class SparxClient {
     );
 
     return {
-      success: true,
+      success:
+        true,
+
       schoolSelected:
         schoolName,
+
       url:
         page.url()
     };
@@ -626,10 +943,13 @@ export class SparxClient {
       .waitForLoadState(
         "networkidle"
       )
-      .catch(() => {});
+      .catch(
+        () => {}
+      );
 
     return {
-      success: true,
+      success:
+        true,
 
       url:
         page.url(),
@@ -639,17 +959,22 @@ export class SparxClient {
 
       inputs:
         await page
-          .locator("input")
+          .locator(
+            "input"
+          )
           .evaluateAll(
             elements =>
               elements.map(
                 input => ({
                   type:
                     input.type,
+
                   name:
                     input.name,
+
                   id:
                     input.id,
+
                   placeholder:
                     input.placeholder
                 })
@@ -658,7 +983,9 @@ export class SparxClient {
 
       buttons:
         await page
-          .locator("button")
+          .locator(
+            "button"
+          )
           .allTextContents()
     };
   }
@@ -697,8 +1024,11 @@ export class SparxClient {
         .first();
 
     await input.waitFor({
-      state: "visible",
-      timeout: 15000
+      state:
+        "visible",
+
+      timeout:
+        15000
     });
 
     await input.fill(
@@ -710,7 +1040,8 @@ export class SparxClient {
     );
 
     return {
-      success: true
+      success:
+        true
     };
   }
 
@@ -748,8 +1079,11 @@ export class SparxClient {
         .first();
 
     await input.waitFor({
-      state: "visible",
-      timeout: 15000
+      state:
+        "visible",
+
+      timeout:
+        15000
     });
 
     await input.fill(
@@ -761,7 +1095,8 @@ export class SparxClient {
     );
 
     return {
-      success: true
+      success:
+        true
     };
   }
 
@@ -788,14 +1123,18 @@ export class SparxClient {
         .getByRole(
           "button",
           {
-            name: /^log in$/i
+            name:
+              /^log in$/i
           }
         )
         .first();
 
     await loginButton.waitFor({
-      state: "visible",
-      timeout: 10000
+      state:
+        "visible",
+
+      timeout:
+        10000
     });
 
     await loginButton.click();
@@ -812,7 +1151,9 @@ export class SparxClient {
       .waitForLoadState(
         "domcontentloaded"
       )
-      .catch(() => {});
+      .catch(
+        () => {}
+      );
 
     console.log(
       `[Sparx] URL after login: ${page.url()}`
@@ -823,7 +1164,9 @@ export class SparxClient {
     );
 
     return {
-      success: true,
+      success:
+        true,
+
       url:
         page.url()
     };
@@ -836,7 +1179,7 @@ export class SparxClient {
   async loginWithMicrosoft({
     email
   } = {}) {
-    const page =
+    let page =
       this.getPage();
 
     if (!page) {
@@ -849,7 +1192,18 @@ export class SparxClient {
       "[Sparx] Starting Microsoft login..."
     );
 
-    const microsoftButton =
+    /*
+     * The school-selection step should already have completed.
+     *
+     * At this point Sparx should show:
+     *
+     * "Log in to Sparx using Microsoft"
+     *
+     * We use several fallbacks because text/ARIA labels can
+     * differ slightly between Sparx deployments.
+     */
+
+    const possibleMicrosoftButtons = [
       page
         .getByRole(
           "button",
@@ -858,21 +1212,127 @@ export class SparxClient {
               /log in to sparx using microsoft/i
           }
         )
-        .first();
+        .first(),
 
-    await microsoftButton.waitFor({
-      state: "visible",
-      timeout: 15000
-    });
+      page
+        .getByRole(
+          "button",
+          {
+            name:
+              /microsoft/i
+          }
+        )
+        .first(),
+
+      page
+        .getByText(
+          /log in to sparx using microsoft/i
+        )
+        .first(),
+
+      page
+        .locator(
+          'button:has-text("Microsoft")'
+        )
+        .first()
+    ];
+
+    let microsoftButton =
+      null;
+
+    for (
+      const candidate of
+        possibleMicrosoftButtons
+    ) {
+      try {
+        if (
+          await candidate
+            .isVisible()
+        ) {
+          microsoftButton =
+            candidate;
+
+          break;
+        }
+      } catch {
+        /*
+         * Try the next candidate.
+         */
+      }
+    }
+
+    if (
+      !microsoftButton
+    ) {
+      const bodyText =
+        await page
+          .locator(
+            "body"
+          )
+          .innerText()
+          .catch(
+            () => ""
+          );
+
+      console.log(
+        "[Sparx] ❌ Microsoft login button was not found."
+      );
+
+      console.log(
+        `[Sparx] Current URL: ${page.url()}`
+      );
+
+      console.log(
+        `[Sparx] Current title: ${await page.title()}`
+      );
+
+      console.log(
+        "[Sparx] Page text preview:"
+      );
+
+      console.log(
+        bodyText.slice(
+          0,
+          5000
+        )
+      );
+
+      throw new Error(
+        "Could not find the 'Log in to Sparx using Microsoft' button."
+      );
+    }
 
     console.log(
       "[Sparx] Microsoft login button found."
     );
 
+    const context =
+      page.context();
+
     const pagesBefore =
-      page
-        .context()
-        .pages();
+      context.pages();
+
+    /*
+     * Start listening before clicking so we don't miss a
+     * newly-created authentication page.
+     */
+
+    let newPagePromise =
+      null;
+
+    try {
+      newPagePromise =
+        context.waitForEvent(
+          "page",
+          {
+            timeout:
+              10000
+          }
+        );
+    } catch {
+      newPagePromise =
+        null;
+    }
 
     await microsoftButton.click();
 
@@ -880,37 +1340,75 @@ export class SparxClient {
       "[Sparx] Microsoft login button clicked."
     );
 
-    await page.waitForTimeout(
-      3000
-    );
-
     let loginPage =
       page;
 
+    /*
+     * Detect a newly opened page.
+     */
+
+    if (
+      newPagePromise
+    ) {
+      try {
+        const newPage =
+          await newPagePromise;
+
+        if (
+          newPage &&
+          newPage !== page
+        ) {
+          loginPage =
+            newPage;
+
+          console.log(
+            "[Sparx] Microsoft opened a new page."
+          );
+        }
+      } catch {
+        /*
+         * No new page. Microsoft may have navigated
+         * the current page instead.
+         */
+      }
+    }
+
+    /*
+     * Give the existing page/navigation some time.
+     */
+
+    await page.waitForTimeout(
+      1500
+    );
+
     const pagesAfter =
-      page
-        .context()
-        .pages();
+      context.pages();
 
     if (
       pagesAfter.length >
-      pagesBefore.length
+        pagesBefore.length
     ) {
-      loginPage =
+      const newestPage =
         pagesAfter[
           pagesAfter.length - 1
         ];
 
-      console.log(
-        "[Sparx] Microsoft opened a new page."
-      );
+      if (
+        newestPage &&
+        newestPage !== page
+      ) {
+        loginPage =
+          newestPage;
+      }
     }
 
     await loginPage
       .waitForLoadState(
         "domcontentloaded"
       )
-      .catch(() => {});
+      .catch(
+        () => {}
+      );
 
     console.log(
       `[Sparx] Microsoft page: ${loginPage.url()}`
@@ -924,7 +1422,9 @@ export class SparxClient {
     // OPTIONAL EMAIL
     // ----------------------------------------------------------
 
-    if (email) {
+    if (
+      email
+    ) {
       const emailInput =
         loginPage
           .locator(
@@ -933,10 +1433,13 @@ export class SparxClient {
           .first();
 
       if (
-        await emailInput.count() > 0 &&
+        await emailInput.count() >
+          0 &&
         await emailInput
           .isVisible()
-          .catch(() => false)
+          .catch(
+            () => false
+          )
       ) {
         await emailInput.fill(
           email
@@ -951,16 +1454,20 @@ export class SparxClient {
             .getByRole(
               "button",
               {
-                name: /next/i
+                name:
+                  /next/i
               }
             )
             .first();
 
         if (
-          await nextButton.count() > 0 &&
+          await nextButton.count() >
+            0 &&
           await nextButton
             .isVisible()
-            .catch(() => false)
+            .catch(
+              () => false
+            )
         ) {
           await nextButton.click();
 
@@ -975,7 +1482,9 @@ export class SparxClient {
       "[Sparx] Complete Microsoft authentication in the browser."
     );
 
-    // Give the user time to interact with the authentication flow.
+    /*
+     * Allow Microsoft authentication to proceed.
+     */
     await loginPage.waitForTimeout(
       10000
     );
@@ -985,7 +1494,9 @@ export class SparxClient {
         loginPage
       );
 
-    if (!loggedIn) {
+    if (
+      !loggedIn
+    ) {
       console.log(
         "[Sparx] Microsoft authentication has not completed yet."
       );
@@ -1003,7 +1514,8 @@ export class SparxClient {
                 "maths.sparx-learning.com/student/"
               ),
           {
-            timeout: 60000
+            timeout:
+              60000
           }
         );
       } catch {
@@ -1025,9 +1537,12 @@ export class SparxClient {
     return {
       success:
         loggedIn,
+
       loggedIn,
+
       method:
         "microsoft",
+
       url:
         loginPage.url()
     };
@@ -1057,7 +1572,9 @@ export class SparxClient {
       (
         await page
           .title()
-          .catch(() => "")
+          .catch(
+            () => ""
+          )
       ).toLowerCase();
 
     const isAuthDomain =
@@ -1080,9 +1597,13 @@ export class SparxClient {
 
     const pageText =
       await page
-        .locator("body")
+        .locator(
+          "body"
+        )
         .innerText()
-        .catch(() => "");
+        .catch(
+          () => ""
+        );
 
     const lowerText =
       pageText.toLowerCase();

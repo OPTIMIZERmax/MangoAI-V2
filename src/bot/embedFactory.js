@@ -975,7 +975,7 @@ export class SupportEmbedFactory {
         {
           name: '📚 Help',
           value:
-            'Use `!help` for available commands.'
+            'Check channel pins or use the available support options.'
         }
       )
       .setFooter({
